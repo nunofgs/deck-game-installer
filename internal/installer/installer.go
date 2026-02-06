@@ -30,6 +30,7 @@ func NewInstaller(logWin *gui.LogWindow) *Installer {
 }
 
 func (i *Installer) Install(path string) error {
+	i.logWin.SetStep("Initializing")
 	i.logWin.Log("--- STEP 1: INITIALIZING ---")
 	i.logWin.Log("Starting installation for: " + path)
 
@@ -75,6 +76,7 @@ func (i *Installer) installFromISO(path string) error {
 	}()
 
 	i.logWin.Log("\n--- STEP 2: MOUNTING ISO ---")
+	i.logWin.SetStep("Mounting ISO")
 	mountPoint, err := i.isoMgr.Mount(path)
 	if err != nil {
 		i.logWin.Log("Standard mount failed: " + err.Error())
@@ -114,6 +116,7 @@ func (i *Installer) installFromExe(path string) error {
 }
 
 func (i *Installer) runInstallationWorkflow(installerPath, gameName string) error {
+	i.logWin.SetStep("Adding to Steam")
 	i.logWin.Log("\n--- STEP 3: ADDING TO STEAM ---")
 
 	cleanName := cleanGameName(gameName)
@@ -163,6 +166,7 @@ func (i *Installer) runInstallationWorkflow(installerPath, gameName string) erro
 
 	urlID := steam.GetURLAppIDFromU32(appID)
 	i.logWin.Log("\n--- STEP 4: RUNNING INSTALLER ---")
+	i.logWin.SetStep("Running Installer")
 	i.logWin.Log("Launching installer...")
 	_ = runCommand("steam", "steam://rungameid/"+urlID)
 
@@ -175,6 +179,7 @@ func (i *Installer) runInstallationWorkflow(installerPath, gameName string) erro
 	}
 
 	i.logWin.Log("\n--- STEP 5: FINDING GAME ---")
+	i.logWin.SetStep("Finding Game")
 	i.logWin.Log("Scanning Proton prefix for game executables...")
 	executables := i.proton.ScanPrefixForExecutables(appID)
 	if len(executables) == 0 {
@@ -200,6 +205,7 @@ func (i *Installer) runInstallationWorkflow(installerPath, gameName string) erro
 	}
 
 	i.logWin.Log("\n--- STEP 6: FINALIZING ---")
+	i.logWin.SetStep("Finalizing")
 	finalAppID, err := i.steam.FindAppIDByPath(selectedExe)
 	if err != nil {
 		i.logWin.Log("Adding game to Steam library...")

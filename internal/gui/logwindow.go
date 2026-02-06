@@ -47,6 +47,12 @@ type LogWindow struct {
 	text   *widget.Label
 	okBtn  *widget.Button
 	cancelBtn *widget.Button
+	stepList *widget.List
+	steps []string
+	stepStatus map[string]string
+	logLines []string
+	logList *widget.List
+	stepTitle *widget.Label
 
 	okCh     chan struct{}
 	cancelCh chan struct{}
@@ -65,10 +71,55 @@ func NewLogWindow(title string) *LogWindow {
 	a := app.New()
 	a.Settings().SetTheme(lightReadableTheme{})
 	w := a.NewWindow(title)
-	w.Resize(fyne.NewSize(700, 500))
+	w.Resize(fyne.NewSize(900, 560))
 
 	text := widget.NewLabel("")
 	text.Wrapping = fyne.TextWrapWord
+	text.TextStyle = fyne.TextStyle{Monospace: true}
+
+	stepTitle := widget.NewLabelWithStyle("Initializing", fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
+	stepSubtitle := widget.NewLabel("Follow the steps on the left and review activity here.")
+
+	steps := []string{
+		"Initializing",
+		"Mounting ISO",
+		"Adding to Steam",
+		"Running Installer",
+		"Finding Game",
+		"Finalizing",
+	}
+	stepStatus := map[string]string{}
+	for _, s := range steps {
+		stepStatus[s] = "pending"
+	}
+
+	stepList := widget.NewList(
+		func() int { return len(steps) },
+		func() fyne.CanvasObject {
+			icon := widget.NewLabel("")
+			name := widget.NewLabel("")
+			name.Wrapping = fyne.TextWrapOff
+			name.Resize(fyne.NewSize(180, name.MinSize().Height))
+			return container.NewHBox(icon, name)
+		},
+		func(i widget.ListItemID, o fyne.CanvasObject) {
+			row := o.(*fyne.Container).Objects
+			icon := row[0].(*widget.Label)
+			label := row[1].(*widget.Label)
+			name := steps[i]
+			switch stepStatus[name] {
+			case "done":
+				icon.SetText("✔")
+				label.SetText(name)
+			case "current":
+				icon.SetText("▶")
+				label.SetText(name)
+			default:
+				icon.SetText("•")
+				label.SetText(name)
+			}
+		},
+	)
 
 	okCh := make(chan struct{}, 1)
 	cancelCh := make(chan struct{}, 1)
@@ -89,7 +140,23 @@ func NewLogWindow(title string) *LogWindow {
 
 	buttons := container.NewHBox(layout.NewSpacer(), okBtn, cancelBtn)
 
-	content := container.NewBorder(nil, buttons, nil, nil, container.NewVScroll(text))
+	logLines := []string{}
+	logList := widget.NewList(
+		func() int { return len(logLines) },
+		func() fyne.CanvasObject { return widget.NewLabel("") },
+		func(i widget.ListItemID, o fyne.CanvasObject) {
+			o.(*widget.Label).SetText(logLines[i])
+		},
+	)
+
+	stepsCard := widget.NewCard("Steps", "", container.NewVScroll(stepList))
+	logHeader := container.NewVBox(stepTitle, stepSubtitle)
+	logCard := widget.NewCard("Activity", "", container.NewBorder(logHeader, nil, nil, nil, container.NewVScroll(logList)))
+
+	split := container.NewHSplit(stepsCard, logCard)
+	split.Offset = 0.32
+
+	content := container.NewBorder(nil, buttons, nil, nil, split)
 	w.SetContent(content)
 
 	lw := &LogWindow{
@@ -98,6 +165,12 @@ func NewLogWindow(title string) *LogWindow {
 		text:    text,
 		okBtn:   okBtn,
 		cancelBtn: cancelBtn,
+		stepList: stepList,
+		steps: steps,
+		stepStatus: stepStatus,
+		logLines: logLines,
+		logList: logList,
+		stepTitle: stepTitle,
 		okCh:    okCh,
 		cancelCh: cancelCh,
 	}
@@ -126,12 +199,28 @@ func (l *LogWindow) Close() {
 
 func (l *LogWindow) Log(message string) {
 	l.runOnUI(func() {
-		current := l.text.Text
-		if current != "" {
-			current += "\n"
+		l.logLines = append(l.logLines, message)
+		l.logList.Refresh()
+	})
+}
+
+func (l *LogWindow) SetStep(name string) {
+	l.runOnUI(func() {
+		seenCurrent := false
+		for _, step := range l.steps {
+			if step == name {
+				l.stepStatus[step] = "current"
+				seenCurrent = true
+				continue
+			}
+			if !seenCurrent {
+				l.stepStatus[step] = "done"
+			} else if l.stepStatus[step] != "done" {
+				l.stepStatus[step] = "pending"
+			}
 		}
-		current += message
-		l.text.SetText(current)
+		l.stepList.Refresh()
+		l.stepTitle.SetText(name)
 	})
 }
 
