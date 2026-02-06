@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Service
+ServiceTypes=KonqPopupMenu/Plugin
+MimeType=application/x-cd-image;application/x-iso9660-image;application/x-executable;application/x-ms-dos-executable;
+Actions=InstallToSteam
+
+[Desktop Action InstallToSteam]
+Name=Install into Steam
+Icon=steam
+Exec=sh -c '"$HOME/.local/bin/deck-game-installer" install "$1"' _ %f
