@@ -32,7 +32,7 @@ func NewInstaller(logWin *gui.LogWindow) *Installer {
 }
 
 func (i *Installer) Install(path string) error {
-	i.logWin.SetStep("Initializing")
+	i.logWin.SetStep(gui.StepInitialize)
 	i.logWin.Log("--- STEP 1: INITIALIZING ---")
 	i.logWin.Log("Starting installation for: " + path)
 
@@ -67,18 +67,20 @@ func (i *Installer) installFromISO(path string) error {
 	}
 
 	defer func() {
+		i.logWin.Log("\n--- CLEANING UP ---")
+		i.logWin.Log("Unmounting ISO...")
 		i.isoMgr.Unmount()
 		if smbMount != nil {
 			i.logWin.Log("Unmounting temporary SMB share...")
 			_ = smbMount.Unmount()
 		}
 		i.logWin.Log("\n--- INSTALLATION FINISHED ---")
-		i.logWin.Log("You can close this window now.")
-		i.logWin.Wait()
+		i.logWin.WaitWithSingleButton("Everything cleaned up. You may now close this window.", "Close")
+		i.logWin.Close()
 	}()
 
 	i.logWin.Log("\n--- STEP 2: MOUNTING ISO ---")
-	i.logWin.SetStep("Mounting ISO")
+	i.logWin.SetStep(gui.StepMountISO)
 	mountPoint, err := i.isoMgr.Mount(path)
 	if err != nil {
 		i.logWin.Log("Standard mount failed: " + err.Error())
@@ -118,7 +120,7 @@ func (i *Installer) installFromExe(path string) error {
 }
 
 func (i *Installer) runInstallationWorkflow(installerPath, gameName string) error {
-	i.logWin.SetStep("Adding to Steam")
+	i.logWin.SetStep(gui.StepAddToSteam)
 	i.logWin.Log("\n--- STEP 3: ADDING TO STEAM ---")
 
 	cleanName := cleanGameName(gameName)
@@ -152,47 +154,69 @@ func (i *Installer) runInstallationWorkflow(installerPath, gameName string) erro
 	}
 
 	if needsRestart {
-		i.logWin.SetButtons("Restart Now", "Later")
+		i.logWin.SetButtons("Restart Now", "Abort")
 		i.logWin.Log("\n>>> STEAM RESTART REQUIRED <<<")
 		i.logWin.Log("Steam must be restarted to recognize the new shortcut and Proton settings.")
-		if i.logWin.Wait() {
+		if i.logWin.WaitWithMessage("Steam needs to restart to apply Proton settings. Click 'Restart Now' to continue.") {
 			i.logWin.Log("Restarting Steam...")
 			i.steam.RestartSteam()
 			i.logWin.Log("Waiting for Steam to restart...")
-			time.Sleep(10 * time.Second)
+			time.Sleep(5 * time.Second) // Brief pause to let Steam start
 		} else {
-			i.logWin.Log("User chose to restart later.")
+			i.logWin.Log("Installation aborted by user.")
+			i.logWin.Log("Cleaning up...")
+			// The defer in installFromISO will handle unmounting
+			return errors.New("installation aborted by user")
 		}
 		i.logWin.SetButtons("OK", "Cancel")
 	}
 
 	urlID := steam.GetURLAppIDFromU32(appID)
 	i.logWin.Log("\n--- STEP 4: RUNNING INSTALLER ---")
-	i.logWin.SetStep("Running Installer")
+	i.logWin.SetStep(gui.StepRunInstaller)
 	i.logWin.Log("Launching installer...")
+	i.logWin.Log("Steam URL: steam://rungameid/" + urlID)
 	_ = runCommand("steam", "steam://rungameid/"+urlID)
+	
+	// Give Steam a moment to process the launch
+	time.Sleep(2 * time.Second)
 
 	i.logWin.Log("\n>>> ACTION REQUIRED <<<")
-	i.logWin.Log("Complete the installation in the window that opened.")
-	i.logWin.Log("Monitoring Steam logs for installer process...")
+	i.logWin.Log("Complete the installation in the game window and quit the installer.")
+	i.logWin.Log("We'll continue automatically once all installer processes exit.")
+	i.logWin.Log("If the installer doesn't appear, click 'I already finished the installation' to continue manually.")
 	
-	// Monitor Steam's logs to detect when installer processes exit
-	if err := waitForSteamGameToExit(urlID, func(status string) {
-		i.logWin.Log(status)
-	}); err != nil {
-		i.logWin.Log("Could not monitor installer automatically: " + err.Error())
-		i.logWin.Log("Please click 'OK' when installation is complete.")
-		if !i.logWin.Wait() {
-			i.logWin.Log("User cancelled.")
-			return nil
+	// Show manual override button and start monitoring in background
+	doneCh := make(chan error, 1)
+	manualCh := make(chan struct{}, 1)
+	
+	go func() {
+		doneCh <- waitForSteamGameToExit(urlID, func(status string) {
+			i.logWin.Log(status)
+		})
+	}()
+	
+	go func() {
+		i.logWin.WaitWithManualOverride()
+		manualCh <- struct{}{}
+	}()
+	
+	// Wait for either automatic detection or manual override
+	select {
+	case err = <-doneCh:
+		if err != nil {
+			i.logWin.Log("Automatic detection failed: " + err.Error())
+			i.logWin.Log("Proceeding anyway - please ensure the installer completed successfully.")
+		} else {
+			i.logWin.Log("All installer processes have exited.")
 		}
-	} else {
-		i.logWin.Log("All installer processes have exited.")
-		time.Sleep(2 * time.Second) // Give filesystem time to settle
+	case <-manualCh:
+		i.logWin.Log("Manual override - continuing...")
 	}
+	time.Sleep(2 * time.Second) // Give filesystem time to settle
 
 	i.logWin.Log("\n--- STEP 5: FINDING GAME ---")
-	i.logWin.SetStep("Finding Game")
+	i.logWin.SetStep(gui.StepFindGame)
 	i.logWin.Log("Scanning Proton prefix for game executables...")
 	executables := i.proton.ScanPrefixForExecutables(appID)
 	if len(executables) == 0 {
@@ -200,44 +224,34 @@ func (i *Installer) runInstallationWorkflow(installerPath, gameName string) erro
 		return errors.New("no executables found")
 	}
 
-	selectedExe := executables[0]
-	if len(executables) > 1 {
-		choice, ok := i.logWin.Select("Select Game", "Select the game executable:", executables)
-		if !ok {
-			return errors.New("game selection cancelled")
-		}
-		selectedExe = choice
+	i.logWin.Log("Found " + strconv.Itoa(len(executables)) + " executable(s)")
+	choice, ok := i.logWin.Select("Select Game", "Select the game executable:", executables)
+	if !ok {
+		return errors.New("game selection cancelled")
 	}
+	selectedExe := choice
 
-	selectedProton := defaultProton
-	if len(versions) > 0 {
-		choice, ok := i.logWin.Select("Select Proton", "Select Proton version for the game:", versions)
-		if ok {
-			selectedProton = choice
-		}
-	}
-
-	i.logWin.Log("\n--- STEP 6: FINALIZING ---")
-	i.logWin.SetStep("Finalizing")
-	finalAppID, err := i.steam.FindAppIDByPath(selectedExe)
-	if err != nil {
-		i.logWin.Log("Adding game to Steam library...")
-		finalAppID, err = i.steam.AddShortcut(cleanName, selectedExe, "", "")
-		if err != nil {
-			i.logWin.Error("Error", "Failed to finalize: "+err.Error())
-			return err
-		}
-	}
-
-	if selectedProton != "" {
-		_ = i.steam.SetProtonVersion(finalAppID, selectedProton)
+	i.logWin.Log("\n--- STEP 6: DONE ---")
+	i.logWin.SetStep(gui.StepDone)
+	i.logWin.Log("Updating Steam shortcut to point to game executable...")
+	i.logWin.Log("Game exe: " + selectedExe)
+	
+	// Update the existing installer shortcut to point to the game exe
+	if err := i.steam.UpdateShortcut(appID, selectedExe, ""); err != nil {
+		i.logWin.Error("Error", "Failed to update shortcut: "+err.Error())
+		return err
 	}
 
 	i.logWin.Log("\nSuccessfully completed installation!")
-	if i.logWin.Confirm("Restart Steam?", "Proton settings require a Steam restart to take effect. Restart now?") {
+	i.logWin.Log("The game will use " + defaultProton + ".")
+	i.logWin.Log("Steam needs to be restarted to recognize the updated shortcut.")
+	
+	// Show Restart Steam button with custom message
+	i.logWin.SetButtons("Restart Steam", "")
+	if i.logWin.WaitWithMessage("Game installed successfully. Restart Steam to play your game.") {
+		i.logWin.Log("Restarting Steam...")
 		i.steam.RestartSteam()
-	} else {
-		i.logWin.Log("Please restart Steam manually to apply Proton settings.")
+		i.logWin.Log("Steam has been restarted. You can now launch your game from Steam!")
 	}
 
 	return nil

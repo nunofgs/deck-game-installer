@@ -18,6 +18,16 @@ import (
 	"fyne.io/fyne/v2/widget"
 )
 
+// Step name constants
+const (
+	StepInitialize     = "Initializing"
+	StepMountISO       = "Mounting ISO"
+	StepAddToSteam     = "Adding to Steam"
+	StepRunInstaller   = "Running Installer"
+	StepFindGame       = "Finding Game"
+	StepDone           = "Done"
+)
+
 type lightReadableTheme struct{}
 
 func (t lightReadableTheme) Color(name fyne.ThemeColorName, variant fyne.ThemeVariant) color.Color {
@@ -60,9 +70,11 @@ type LogWindow struct {
 	okBtn            *widget.Button
 	cancelBtn        *widget.Button
 	quitBtn          *widget.Button
+	manualOverrideBtn *widget.Button
 
 	okCh      chan struct{}
 	cancelCh  chan struct{}
+	manualOverrideCh chan struct{}
 	closeOnce sync.Once
 	
 	logFile   *os.File
@@ -88,7 +100,7 @@ func NewLogWindow(title string) *LogWindow {
 		"Add to Steam",
 		"Run Installer",
 		"Find Game",
-		"Finalize",
+		"Done",
 	}
 
 	titleLabel := widget.NewLabelWithStyle("Installing to Steam", fyne.TextAlignCenter, fyne.TextStyle{Bold: true})
@@ -179,6 +191,7 @@ func NewLogWindow(title string) *LogWindow {
 
 	okCh := make(chan struct{}, 1)
 	cancelCh := make(chan struct{}, 1)
+	manualOverrideCh := make(chan struct{}, 1)
 
 	okBtn := widget.NewButton("OK", func() {
 		select {
@@ -193,6 +206,13 @@ func NewLogWindow(title string) *LogWindow {
 		default:
 		}
 		a.Quit()
+	})
+	
+	manualOverrideBtn := widget.NewButton("I already finished the installation", func() {
+		select {
+		case manualOverrideCh <- struct{}{}:
+		default:
+		}
 	})
 	
 	quitBtn := widget.NewButton("Quit", func() {
@@ -236,8 +256,10 @@ func NewLogWindow(title string) *LogWindow {
 		okBtn:            okBtn,
 		cancelBtn:        cancelBtn,
 		quitBtn:          quitBtn,
+		manualOverrideBtn: manualOverrideBtn,
 		okCh:             okCh,
 		cancelCh:         cancelCh,
+		manualOverrideCh: manualOverrideCh,
 		logFile:          logFile,
 	}
 
@@ -277,9 +299,9 @@ func (l *LogWindow) Log(message string) {
 }
 
 func (l *LogWindow) SetGameName(name string) {
+	l.gameName = name
 	l.runOnUI(func() {
-		l.gameName = name
-		l.titleLabel.SetText("Installing " + name)
+		l.titleLabel.SetText("Installing " + name + " to Steam")
 	})
 }
 
@@ -287,12 +309,12 @@ func (l *LogWindow) SetStep(name string) {
 	l.runOnUI(func() {
 		// Map step names to indices
 		stepMap := map[string]int{
-			"Initializing":      0,
-			"Mounting ISO":      1,
-			"Adding to Steam":   2,
-			"Running Installer": 3,
-			"Finding Game":      4,
-			"Finalizing":        5,
+			StepInitialize:   0,
+			StepMountISO:     1,
+			StepAddToSteam:   2,
+			StepRunInstaller: 3,
+			StepFindGame:     4,
+			StepDone:         5,
 		}
 
 		stepIndex, ok := stepMap[name]
@@ -300,8 +322,8 @@ func (l *LogWindow) SetStep(name string) {
 			return
 		}
 
-		completeColor := color.NRGBA{R: 76, G: 175, B: 80, A: 255}     // Green
-		inactiveColor := color.NRGBA{R: 200, G: 200, B: 200, A: 255}   // Gray
+		completeColor := color.NRGBA{R: 76, G: 175, B: 80, A: 255}   // Green
+		inactiveColor := color.NRGBA{R: 200, G: 200, B: 200, A: 255} // Gray
 
 		l.currentStepIndex = stepIndex
 
@@ -338,26 +360,30 @@ func (l *LogWindow) SetStep(name string) {
 
 func (l *LogWindow) getStepSubtitle(step string) string {
 	switch step {
-	case "Initializing":
+	case StepInitialize:
 		return "Starting installation process..."
-	case "Mounting ISO":
+	case StepMountISO:
 		return "Please wait while the ISO is being mounted..."
-	case "Adding to Steam":
+	case StepAddToSteam:
 		return "Configuring Steam library shortcut..."
-	case "Running Installer":
+	case StepRunInstaller:
 		return "Complete the installation in the game window, then click OK below"
-	case "Finding Game":
+	case StepFindGame:
 		return "Scanning for installed game files..."
-	case "Finalizing":
-		return "Creating final Steam library entry..."
+	case StepDone:
+		return "Your game is now installed. Enjoy!"
 	default:
 		return "Processing..."
 	}
 }
 
 func (l *LogWindow) Wait() bool {
+	return l.WaitWithMessage("Waiting for user input...")
+}
+
+func (l *LogWindow) WaitWithMessage(message string) bool {
 	l.runOnUI(func() {
-		l.subtitleLabel.SetText("Waiting for user input...")
+		l.subtitleLabel.SetText(message)
 		l.buttonContainer.Objects = []fyne.CanvasObject{container.NewHBox(l.okBtn, l.cancelBtn)}
 		l.buttonContainer.Show()
 		l.buttonContainer.Refresh()
@@ -377,12 +403,44 @@ func (l *LogWindow) Wait() bool {
 		l.cancelBtn.SetText("Cancel")
 		// Restore the step-specific subtitle
 		if l.currentStepIndex < len(l.steps) {
-			stepName := []string{"Initializing", "Mounting ISO", "Adding to Steam", "Running Installer", "Finding Game", "Finalizing"}[l.currentStepIndex]
+			stepName := []string{StepInitialize, StepMountISO, StepAddToSteam, StepRunInstaller, StepFindGame, StepDone}[l.currentStepIndex]
 			subtitle := l.getStepSubtitle(stepName)
 			l.subtitleLabel.SetText(subtitle)
 		}
 	})
 	return res
+}
+
+func (l *LogWindow) WaitWithManualOverride() {
+	l.runOnUI(func() {
+		l.subtitleLabel.SetText("Waiting for installer to complete...")
+		l.buttonContainer.Objects = []fyne.CanvasObject{container.NewHBox(l.manualOverrideBtn)}
+		l.buttonContainer.Show()
+		l.buttonContainer.Refresh()
+	})
+
+	<-l.manualOverrideCh
+
+	l.runOnUI(func() {
+		l.buttonContainer.Hide()
+	})
+}
+
+func (l *LogWindow) WaitWithSingleButton(message, buttonLabel string) {
+	l.runOnUI(func() {
+		l.okBtn.SetText(buttonLabel)
+		l.subtitleLabel.SetText(message)
+		l.buttonContainer.Objects = []fyne.CanvasObject{container.NewHBox(l.okBtn)}
+		l.buttonContainer.Show()
+		l.buttonContainer.Refresh()
+	})
+
+	<-l.okCh
+
+	l.runOnUI(func() {
+		l.buttonContainer.Hide()
+		l.okBtn.SetText("OK")
+	})
 }
 
 func (l *LogWindow) ShowComplete() {
@@ -464,6 +522,10 @@ func (l *LogWindow) Select(title, prompt string, options []string) (string, bool
 	displayPrefix := ""
 	if len(commonPrefix) > 20 {
 		displayPrefix = commonPrefix
+		// Trim the prefix to end at /pfx/ if present
+		if idx := strings.Index(displayPrefix, "/pfx/"); idx != -1 {
+			displayPrefix = displayPrefix[:idx+4] // Include /pfx but not the trailing /
+		}
 	}
 
 	displayPrompt := prompt
@@ -477,9 +539,12 @@ func (l *LogWindow) Select(title, prompt string, options []string) (string, bool
 		func(i widget.ListItemID, o fyne.CanvasObject) {
 			text := options[i]
 			if displayPrefix != "" {
+				// Remove the prefix and show the relative path
 				text = strings.TrimPrefix(text, displayPrefix)
+				// Remove leading slash if present
+				text = strings.TrimPrefix(text, "/")
 			}
-			text = truncateMiddle(text, 55)
+			text = truncateMiddle(text, 80)
 			o.(*widget.Label).SetText(text)
 		},
 	)
