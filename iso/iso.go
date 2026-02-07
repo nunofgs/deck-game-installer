@@ -2,6 +2,7 @@ package iso
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -13,20 +14,30 @@ type Manager struct {
 	loopDevice string
 	mountPoint string
 	isRoot     bool
+	logFn      func(string)
 }
 
 func NewManager() *Manager {
-	return &Manager{}
+	return &Manager{
+		logFn: func(string) {}, // no-op by default
+	}
+}
+
+func (m *Manager) SetLogger(logFn func(string)) {
+	m.logFn = logFn
 }
 
 func (m *Manager) Mount(path string) (string, error) {
+	m.logFn("Checking for existing mount...")
 	if existing, err := findExistingMount(path); err == nil && existing != nil {
 		m.loopDevice = existing.loopDevice
 		m.mountPoint = existing.mountPoint
 		m.isRoot = false
+		m.logFn("Found existing mount at: " + m.mountPoint)
 		return m.mountPoint, nil
 	}
 
+	m.logFn("Setting up loop device...")
 	setupCmd := exec.Command("udisksctl", "loop-setup", "-f", path)
 	setupOut, err := setupCmd.CombinedOutput()
 	if err != nil {
@@ -38,7 +49,9 @@ func (m *Manager) Mount(path string) (string, error) {
 		return "", errors.New("failed to parse loop device from: " + string(setupOut))
 	}
 	m.loopDevice = loopMatch[1]
+	m.logFn("Loop device created: " + m.loopDevice)
 
+	m.logFn("Mounting loop device...")
 	mountCmd := exec.Command("udisksctl", "mount", "-b", m.loopDevice)
 	mountOut, err := mountCmd.CombinedOutput()
 	if err != nil {
@@ -52,16 +65,23 @@ func (m *Manager) Mount(path string) (string, error) {
 
 	m.mountPoint = strings.TrimRight(mpMatch[1], ".")
 	m.isRoot = false
+	m.logFn("Successfully mounted at: " + m.mountPoint)
 	return m.mountPoint, nil
 }
 
 func (m *Manager) MountRoot(path string) (string, error) {
+	m.logFn("Creating temporary mount directory...")
 	tmp, err := os.MkdirTemp("", "steamer_mnt_")
 	if err != nil {
 		return "", err
 	}
 
-	cmd := exec.Command("pkexec", "mount", "-o", "loop,ro", path, tmp)
+	uid := os.Getuid()
+	gid := os.Getgid()
+	options := fmt.Sprintf("loop,ro,uid=%d,gid=%d", uid, gid)
+
+	m.logFn("Requesting elevated permissions to mount ISO...")
+	cmd := exec.Command("pkexec", "mount", "-o", options, path, tmp)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		_ = os.RemoveAll(tmp)
 		return "", errors.New(strings.TrimSpace(string(out)))
@@ -69,6 +89,7 @@ func (m *Manager) MountRoot(path string) (string, error) {
 
 	m.mountPoint = tmp
 	m.isRoot = true
+	m.logFn("Successfully mounted with elevated permissions at: " + tmp)
 	return m.mountPoint, nil
 }
 

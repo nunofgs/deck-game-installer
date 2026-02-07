@@ -21,9 +21,14 @@ type Installer struct {
 }
 
 func NewInstaller(logWin *gui.LogWindow) *Installer {
+	isoMgr := iso.NewManager()
+	isoMgr.SetLogger(func(msg string) {
+		logWin.Log(msg)
+	})
+	
 	return &Installer{
 		logWin: logWin,
-		isoMgr: iso.NewManager(),
+		isoMgr: isoMgr,
 		steam:  steam.NewManager(),
 		proton: proton.NewManager(),
 	}
@@ -77,12 +82,15 @@ func (i *Installer) installFromISO(path string) error {
 
 	i.logWin.Log("\n--- STEP 2: MOUNTING ISO ---")
 	i.logWin.SetStep("Mounting ISO")
+	i.logWin.Log("Attempting to mount ISO file...")
+	i.logWin.Log("ISO Path: " + path)
 	mountPoint, err := i.isoMgr.Mount(path)
 	if err != nil {
 		i.logWin.Log("Standard mount failed: " + err.Error())
-		i.logWin.Log("Attempting root mount...")
+		i.logWin.Log("Attempting root mount (may require password)...")
 		mountPoint, err = i.isoMgr.MountRoot(path)
 		if err != nil {
+			i.logWin.Log("Root mount also failed: " + err.Error())
 			return err
 		}
 	}
@@ -120,17 +128,16 @@ func (i *Installer) runInstallationWorkflow(installerPath, gameName string) erro
 	i.logWin.Log("\n--- STEP 3: ADDING TO STEAM ---")
 
 	cleanName := cleanGameName(gameName)
-	installerName := cleanName + " (Installer)"
 
 	appID, err := i.steam.FindAppIDByPath(installerPath)
 	if err == nil {
 		i.logWin.Log("Shortcut for installer already exists.")
 	} else {
 		i.logWin.Log("Adding installer to Steam library...")
-		appID, err = i.steam.AddShortcut(installerName, installerPath, "", "")
+		appID, err = i.steam.AddShortcut(cleanName, installerPath, "", "")
 		if err != nil {
 			i.logWin.Log("Failed to add shortcut: " + err.Error())
-			appID = steam.GenerateAppID(installerPath, installerName)
+			appID = steam.GenerateAppID(installerPath, cleanName)
 		}
 	}
 
@@ -154,10 +161,11 @@ func (i *Installer) runInstallationWorkflow(installerPath, gameName string) erro
 		i.logWin.Log("\n>>> STEAM RESTART REQUIRED <<<")
 		i.logWin.Log("Steam must be restarted to recognize the new shortcut and Proton settings.")
 		if i.logWin.Wait() {
-			i.logWin.Log("Restarting Steam...")
+			i.logWin.Log("Shutting down Steam...")
 			i.steam.RestartSteam()
-			i.logWin.Log("Waiting for Steam to restart...")
+			i.logWin.Log("Steam restarted. Waiting for it to fully initialize...")
 			time.Sleep(10 * time.Second)
+			i.logWin.Log("Steam should now be ready.")
 		} else {
 			i.logWin.Log("User chose to restart later.")
 		}
@@ -196,35 +204,26 @@ func (i *Installer) runInstallationWorkflow(installerPath, gameName string) erro
 		selectedExe = choice
 	}
 
-	selectedProton := defaultProton
-	if len(versions) > 0 {
-		choice, ok := i.logWin.Select("Select Proton", "Select Proton version for the game:", versions)
-		if ok {
-			selectedProton = choice
-		}
-	}
-
 	i.logWin.Log("\n--- STEP 6: FINALIZING ---")
 	i.logWin.SetStep("Finalizing")
-	finalAppID, err := i.steam.FindAppIDByPath(selectedExe)
-	if err != nil {
-		i.logWin.Log("Adding game to Steam library...")
-		finalAppID, err = i.steam.AddShortcut(cleanName, selectedExe, "", "")
-		if err != nil {
-			i.logWin.Error("Error", "Failed to finalize: "+err.Error())
-			return err
-		}
-	}
-
-	if selectedProton != "" {
-		_ = i.steam.SetProtonVersion(finalAppID, selectedProton)
+	i.logWin.Log("Updating Steam shortcut to point to game executable...")
+	i.logWin.Log("Game exe: " + selectedExe)
+	
+	// Update the existing installer shortcut to point to the game exe
+	if err := i.steam.UpdateShortcut(appID, selectedExe, ""); err != nil {
+		i.logWin.Error("Error", "Failed to update shortcut: "+err.Error())
+		return err
 	}
 
 	i.logWin.Log("\nSuccessfully completed installation!")
-	if i.logWin.Confirm("Restart Steam?", "Proton settings require a Steam restart to take effect. Restart now?") {
+	i.logWin.Log("The game will keep using Proton Experimental.")
+	if i.logWin.Confirm("Restart Steam?", "A Steam restart is recommended to refresh the library. Restart now?") {
+		i.logWin.Log("Shutting down Steam...")
 		i.steam.RestartSteam()
+		i.logWin.Log("Steam has been restarted.")
+		i.logWin.Log("The game should appear in your library once Steam finishes loading.")
 	} else {
-		i.logWin.Log("Please restart Steam manually to apply Proton settings.")
+		i.logWin.Log("Please restart Steam manually to see the updated game.")
 	}
 
 	return nil

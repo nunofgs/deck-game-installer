@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strconv"
+	"syscall"
 	"time"
 
 	"deck-game-installer/vdf"
@@ -130,7 +131,9 @@ func (m *Manager) AddShortcut(appName, exePath, args, startDir string) (int32, e
 	}
 
 	quoted := "\"" + exePath + "\""
-	for _, v := range shortcuts {
+	var existingKey string
+
+	for k, v := range shortcuts {
 		entry, ok := v.(map[string]kvValue)
 		if !ok {
 			continue
@@ -141,15 +144,29 @@ func (m *Manager) AddShortcut(appName, exePath, args, startDir string) (int32, e
 				return appid, nil
 			}
 		}
+		
+		// If name matches, we'll maintain this entry instead of creating a new one
+		name, _ := entry["AppName"].(string)
+		if name == appName {
+			existingKey = k
+		}
 	}
 
 	appid := GenerateAppID(exePath, appName)
-	idx := nextShortcutIndex(shortcuts)
+	var key string
+	
+	if existingKey != "" {
+		key = existingKey
+	} else {
+		idx := nextShortcutIndex(shortcuts)
+		key = strconv.Itoa(idx)
+	}
+
 	if startDir == "" {
 		startDir = filepath.Dir(exePath)
 	}
 
-	shortcuts[strconv.Itoa(idx)] = map[string]kvValue{
+	shortcuts[key] = map[string]kvValue{
 		"appid":             appid,
 		"AppName":           appName,
 		"Exe":               quoted,
@@ -180,6 +197,50 @@ func (m *Manager) AddShortcut(appName, exePath, args, startDir string) (int32, e
 	}
 
 	return appid, nil
+}
+
+func (m *Manager) UpdateShortcut(appID int32, newExePath, newStartDir string) error {
+	path := m.ShortcutsPath()
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+
+	obj, err := ReadBinaryVDF(data)
+	if err != nil {
+		return err
+	}
+
+	shortcuts, ok := obj["shortcuts"].(map[string]kvValue)
+	if !ok {
+		return errors.New("shortcuts not found")
+	}
+
+	// Find the shortcut with matching appID
+	for _, v := range shortcuts {
+		entry, ok := v.(map[string]kvValue)
+		if !ok {
+			continue
+		}
+		if existingID, ok := entry["appid"].(int32); ok && existingID == appID {
+			// Update the exe and start directory
+			entry["Exe"] = "\"" + newExePath + "\""
+			if newStartDir == "" {
+				newStartDir = filepath.Dir(newExePath)
+			}
+			entry["StartDir"] = newStartDir
+			
+			// Write back to file
+			newData, err := WriteBinaryVDF(obj)
+			if err != nil {
+				return err
+			}
+			return os.WriteFile(path, newData, 0o644)
+		}
+	}
+
+	return errors.New("shortcut not found")
 }
 
 func nextShortcutIndex(shortcuts map[string]kvValue) int {
@@ -287,9 +348,28 @@ func ensureNestedMap(root map[string]any, keys ...string) map[string]any {
 }
 
 func (m *Manager) RestartSteam() {
-	_ = execCommand("pkill", "-x", "steam")
-	time.Sleep(3 * time.Second)
-	_ = execCommand("steam")
+	// Kill Steam gracefully first
+	_ = exec.Command("steam", "-shutdown").Run()
+	time.Sleep(2 * time.Second)
+	
+	// Force kill if still running
+	_ = exec.Command("pkill", "-x", "steam").Run()
+	time.Sleep(1 * time.Second)
+	
+	// Start Steam in background, fully detached from this process
+	cmd := exec.Command("steam")
+	cmd.Stdin = nil
+	cmd.Stdout = nil
+	cmd.Stderr = nil
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		Setsid: true, // Create new session to detach from parent
+	}
+	_ = cmd.Start()
+	
+	// Release the process so it's not tied to this parent
+	if cmd.Process != nil {
+		_ = cmd.Process.Release()
+	}
 }
 
 func execCommand(name string, args ...string) error {

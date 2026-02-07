@@ -2,6 +2,7 @@ package iso
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -39,7 +40,9 @@ func RemountSMB(info *SMBInfo) (*SMBMount, error) {
 	}
 
 	shareUNC := "//" + info.Server + "/" + info.Share
-	options := "ro,guest"
+	uid := os.Getuid()
+	gid := os.Getgid()
+	options := fmt.Sprintf("ro,guest,uid=%d,gid=%d", uid, gid)
 
 	cmd := exec.Command("pkexec", "mount", "-t", "cifs", shareUNC, mnt, "-o", options)
 	if out, err := cmd.CombinedOutput(); err != nil {

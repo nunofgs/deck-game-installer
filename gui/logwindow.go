@@ -3,6 +3,7 @@ package gui
 import (
 	"fmt"
 	"image/color"
+	"strings"
 	"sync"
 
 	"fyne.io/fyne/v2"
@@ -53,6 +54,8 @@ type LogWindow struct {
 	logLines []string
 	logList *widget.List
 	stepTitle *widget.Label
+	stepSubtitle *widget.Label
+	buttonContainer *fyne.Container
 
 	okCh     chan struct{}
 	cancelCh chan struct{}
@@ -78,7 +81,7 @@ func NewLogWindow(title string) *LogWindow {
 	text.TextStyle = fyne.TextStyle{Monospace: true}
 
 	stepTitle := widget.NewLabelWithStyle("Initializing", fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
-	stepSubtitle := widget.NewLabel("Follow the steps on the left and review activity here.")
+	stepSubtitle := widget.NewLabel("Starting installation process...")
 
 	steps := []string{
 		"Initializing",
@@ -138,7 +141,8 @@ func NewLogWindow(title string) *LogWindow {
 		a.Quit()
 	})
 
-	buttons := container.NewHBox(layout.NewSpacer(), okBtn, cancelBtn)
+	buttonContainer := container.NewHBox(layout.NewSpacer(), okBtn, cancelBtn)
+	buttonContainer.Hide()
 
 	logLines := []string{}
 	logList := widget.NewList(
@@ -151,12 +155,12 @@ func NewLogWindow(title string) *LogWindow {
 
 	stepsCard := widget.NewCard("Steps", "", container.NewVScroll(stepList))
 	logHeader := container.NewVBox(stepTitle, stepSubtitle)
-	logCard := widget.NewCard("Activity", "", container.NewBorder(logHeader, nil, nil, nil, container.NewVScroll(logList)))
+	logCard := widget.NewCard("Activity", "", container.NewBorder(logHeader, buttonContainer, nil, nil, container.NewVScroll(logList)))
 
 	split := container.NewHSplit(stepsCard, logCard)
 	split.Offset = 0.32
 
-	content := container.NewBorder(nil, buttons, nil, nil, split)
+	content := container.NewBorder(nil, nil, nil, nil, split)
 	w.SetContent(content)
 
 	lw := &LogWindow{
@@ -165,12 +169,14 @@ func NewLogWindow(title string) *LogWindow {
 		text:    text,
 		okBtn:   okBtn,
 		cancelBtn: cancelBtn,
+		buttonContainer: buttonContainer,
 		stepList: stepList,
 		steps: steps,
 		stepStatus: stepStatus,
 		logLines: logLines,
 		logList: logList,
 		stepTitle: stepTitle,
+		stepSubtitle: stepSubtitle,
 		okCh:    okCh,
 		cancelCh: cancelCh,
 	}
@@ -201,6 +207,8 @@ func (l *LogWindow) Log(message string) {
 	l.runOnUI(func() {
 		l.logLines = append(l.logLines, message)
 		l.logList.Refresh()
+		// Scroll to the bottom to show the latest log
+		l.logList.ScrollToBottom()
 	})
 }
 
@@ -221,16 +229,55 @@ func (l *LogWindow) SetStep(name string) {
 		}
 		l.stepList.Refresh()
 		l.stepTitle.SetText(name)
+		
+		// Update subtitle with contextual information
+		subtitle := l.getStepSubtitle(name)
+		l.stepSubtitle.SetText(subtitle)
 	})
 }
 
+func (l *LogWindow) getStepSubtitle(step string) string {
+	switch step {
+	case "Initializing":
+		return "Starting installation process..."
+	case "Mounting ISO":
+		return "Please wait while the ISO is being mounted..."
+	case "Adding to Steam":
+		return "Configuring Steam library shortcut..."
+	case "Running Installer":
+		return "Action required - Complete the installation in the game window"
+	case "Finding Game":
+		return "Scanning for installed game files..."
+	case "Finalizing":
+		return "Creating final Steam library entry..."
+	default:
+		return "Processing..."
+	}
+}
+
 func (l *LogWindow) Wait() bool {
+	l.runOnUI(func() {
+		l.stepSubtitle.SetText("Waiting for user input...")
+		l.buttonContainer.Show()
+	})
+
+	var res bool
 	select {
 	case <-l.okCh:
-		return true
+		res = true
 	case <-l.cancelCh:
-		return false
+		res = false
 	}
+
+	l.runOnUI(func() {
+		l.buttonContainer.Hide()
+		l.okBtn.SetText("OK")
+		l.cancelBtn.SetText("Cancel")
+		// Restore the step-specific subtitle
+		subtitle := l.getStepSubtitle(l.stepTitle.Text)
+		l.stepSubtitle.SetText(subtitle)
+	})
+	return res
 }
 
 func (l *LogWindow) SetButtons(okLabel, cancelLabel string) {
@@ -267,16 +314,59 @@ func (l *LogWindow) Error(title, message string) {
 	})
 }
 
+func findCommonPrefix(strs []string) string {
+	if len(strs) == 0 {
+		return ""
+	}
+	prefix := strs[0]
+	for _, s := range strs {
+		for !strings.HasPrefix(s, prefix) {
+			prefix = prefix[:len(prefix)-1]
+		}
+	}
+	if idx := strings.LastIndex(prefix, "/"); idx != -1 {
+		prefix = prefix[:idx+1]
+	}
+	return prefix
+}
+
+func truncateMiddle(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	if maxLen < 3 {
+		return s[:maxLen]
+	}
+	partLen := (maxLen - 3) / 2
+	return s[:partLen] + "..." + s[len(s)-partLen:]
+}
+
 func (l *LogWindow) Select(title, prompt string, options []string) (string, bool) {
 	resultCh := make(chan string, 1)
 	cancelCh := make(chan struct{}, 1)
 	selected := ""
 
+	commonPrefix := findCommonPrefix(options)
+	displayPrefix := ""
+	if len(commonPrefix) > 20 {
+		displayPrefix = commonPrefix
+	}
+
+	displayPrompt := prompt
+	if displayPrefix != "" {
+		displayPrompt += "\nPrefix: " + displayPrefix
+	}
+
 	list := widget.NewList(
 		func() int { return len(options) },
 		func() fyne.CanvasObject { return widget.NewLabel("") },
 		func(i widget.ListItemID, o fyne.CanvasObject) {
-			o.(*widget.Label).SetText(options[i])
+			text := options[i]
+			if displayPrefix != "" {
+				text = strings.TrimPrefix(text, displayPrefix)
+			}
+			text = truncateMiddle(text, 55)
+			o.(*widget.Label).SetText(text)
 		},
 	)
 	list.OnSelected = func(id widget.ListItemID) {
@@ -286,7 +376,7 @@ func (l *LogWindow) Select(title, prompt string, options []string) (string, bool
 	}
 
 	content := container.NewBorder(
-		widget.NewLabel(prompt),
+		widget.NewLabel(displayPrompt),
 		nil,
 		nil,
 		nil,
