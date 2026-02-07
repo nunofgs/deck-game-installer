@@ -2,8 +2,10 @@ package installer
 
 import (
 	"errors"
+	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -21,14 +23,9 @@ type Installer struct {
 }
 
 func NewInstaller(logWin *gui.LogWindow) *Installer {
-	isoMgr := iso.NewManager()
-	isoMgr.SetLogger(func(msg string) {
-		logWin.Log(msg)
-	})
-	
 	return &Installer{
 		logWin: logWin,
-		isoMgr: isoMgr,
+		isoMgr: iso.NewManager(),
 		steam:  steam.NewManager(),
 		proton: proton.NewManager(),
 	}
@@ -53,15 +50,10 @@ func (i *Installer) Install(path string) error {
 func (i *Installer) installFromISO(path string) error {
 	var smbMount *iso.SMBMount
 
-	// Set game name early
-	gameName := strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
-	i.logWin.SetGameName(gameName)
-
 	if smb := iso.ParseKioPath(path); smb != nil {
 		i.logWin.Log("\n--- DETECTED NETWORK SHARE ---")
 		i.logWin.Log("Server: " + smb.Server + ", Share: " + smb.Share)
-		i.logWin.Log("Looking for share: //" + smb.Server + "/" + smb.Share)
-		i.logWin.Log("Checking for existing SMB mount...")
+		i.logWin.Log("Automatically remounting SMB share as system drive (requires admin password)...")
 
 		m, err := iso.RemountSMB(smb)
 		if err != nil {
@@ -69,8 +61,8 @@ func (i *Installer) installFromISO(path string) error {
 		} else {
 			smbMount = m
 			path = filepath.Join(m.MountPoint, smb.RelPath)
-			i.logWin.Log("Using SMB mount at: " + m.MountPoint)
-			i.logWin.Log("ISO will be accessed at: " + path)
+			i.logWin.Log("SMB Share remounted at: " + m.MountPoint)
+			i.logWin.Log("New ISO Path: " + path)
 		}
 	}
 
@@ -87,15 +79,12 @@ func (i *Installer) installFromISO(path string) error {
 
 	i.logWin.Log("\n--- STEP 2: MOUNTING ISO ---")
 	i.logWin.SetStep("Mounting ISO")
-	i.logWin.Log("Attempting to mount ISO file...")
-	i.logWin.Log("ISO Path: " + path)
 	mountPoint, err := i.isoMgr.Mount(path)
 	if err != nil {
 		i.logWin.Log("Standard mount failed: " + err.Error())
-		i.logWin.Log("Attempting root mount (may require password)...")
+		i.logWin.Log("Attempting root mount...")
 		mountPoint, err = i.isoMgr.MountRoot(path)
 		if err != nil {
-			i.logWin.Log("Root mount also failed: " + err.Error())
 			return err
 		}
 	}
@@ -124,10 +113,8 @@ func (i *Installer) installFromISO(path string) error {
 }
 
 func (i *Installer) installFromExe(path string) error {
-	gameName := strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
-	i.logWin.SetGameName(gameName)
 	i.logWin.Log("Selected installer: " + path)
-	return i.runInstallationWorkflow(path, gameName)
+	return i.runInstallationWorkflow(path, strings.TrimSuffix(filepath.Base(path), filepath.Ext(path)))
 }
 
 func (i *Installer) runInstallationWorkflow(installerPath, gameName string) error {
@@ -135,16 +122,17 @@ func (i *Installer) runInstallationWorkflow(installerPath, gameName string) erro
 	i.logWin.Log("\n--- STEP 3: ADDING TO STEAM ---")
 
 	cleanName := cleanGameName(gameName)
+	installerName := cleanName + " (Installer)"
 
 	appID, err := i.steam.FindAppIDByPath(installerPath)
 	if err == nil {
 		i.logWin.Log("Shortcut for installer already exists.")
 	} else {
 		i.logWin.Log("Adding installer to Steam library...")
-		appID, err = i.steam.AddShortcut(cleanName, installerPath, "", "")
+		appID, err = i.steam.AddShortcut(installerName, installerPath, "", "")
 		if err != nil {
 			i.logWin.Log("Failed to add shortcut: " + err.Error())
-			appID = steam.GenerateAppID(installerPath, cleanName)
+			appID = steam.GenerateAppID(installerPath, installerName)
 		}
 	}
 
@@ -168,11 +156,10 @@ func (i *Installer) runInstallationWorkflow(installerPath, gameName string) erro
 		i.logWin.Log("\n>>> STEAM RESTART REQUIRED <<<")
 		i.logWin.Log("Steam must be restarted to recognize the new shortcut and Proton settings.")
 		if i.logWin.Wait() {
-			i.logWin.Log("Shutting down Steam...")
+			i.logWin.Log("Restarting Steam...")
 			i.steam.RestartSteam()
-			i.logWin.Log("Steam restarted. Waiting for it to fully initialize...")
+			i.logWin.Log("Waiting for Steam to restart...")
 			time.Sleep(10 * time.Second)
-			i.logWin.Log("Steam should now be ready.")
 		} else {
 			i.logWin.Log("User chose to restart later.")
 		}
@@ -186,11 +173,22 @@ func (i *Installer) runInstallationWorkflow(installerPath, gameName string) erro
 	_ = runCommand("steam", "steam://rungameid/"+urlID)
 
 	i.logWin.Log("\n>>> ACTION REQUIRED <<<")
-	i.logWin.Log("1. Complete the installation in the window that opened.")
-	i.logWin.Log("2. Once the installation is finished, CLICK 'OK' BELOW to continue.")
-	if !i.logWin.Wait() {
-		i.logWin.Log("User cancelled.")
-		return nil
+	i.logWin.Log("Complete the installation in the window that opened.")
+	i.logWin.Log("Monitoring Steam logs for installer process...")
+	
+	// Monitor Steam's logs to detect when installer processes exit
+	if err := waitForSteamGameToExit(urlID, func(status string) {
+		i.logWin.Log(status)
+	}); err != nil {
+		i.logWin.Log("Could not monitor installer automatically: " + err.Error())
+		i.logWin.Log("Please click 'OK' when installation is complete.")
+		if !i.logWin.Wait() {
+			i.logWin.Log("User cancelled.")
+			return nil
+		}
+	} else {
+		i.logWin.Log("All installer processes have exited.")
+		time.Sleep(2 * time.Second) // Give filesystem time to settle
 	}
 
 	i.logWin.Log("\n--- STEP 5: FINDING GAME ---")
@@ -211,30 +209,36 @@ func (i *Installer) runInstallationWorkflow(installerPath, gameName string) erro
 		selectedExe = choice
 	}
 
+	selectedProton := defaultProton
+	if len(versions) > 0 {
+		choice, ok := i.logWin.Select("Select Proton", "Select Proton version for the game:", versions)
+		if ok {
+			selectedProton = choice
+		}
+	}
+
 	i.logWin.Log("\n--- STEP 6: FINALIZING ---")
 	i.logWin.SetStep("Finalizing")
-	i.logWin.Log("Updating Steam shortcut to point to game executable...")
-	i.logWin.Log("Game exe: " + selectedExe)
-	
-	// Update the existing installer shortcut to point to the game exe
-	if err := i.steam.UpdateShortcut(appID, selectedExe, ""); err != nil {
-		i.logWin.Error("Error", "Failed to update shortcut: "+err.Error())
-		return err
+	finalAppID, err := i.steam.FindAppIDByPath(selectedExe)
+	if err != nil {
+		i.logWin.Log("Adding game to Steam library...")
+		finalAppID, err = i.steam.AddShortcut(cleanName, selectedExe, "", "")
+		if err != nil {
+			i.logWin.Error("Error", "Failed to finalize: "+err.Error())
+			return err
+		}
+	}
+
+	if selectedProton != "" {
+		_ = i.steam.SetProtonVersion(finalAppID, selectedProton)
 	}
 
 	i.logWin.Log("\nSuccessfully completed installation!")
-	i.logWin.Log("The game will keep using Proton Experimental.")
-	
-	// Ask about restarting Steam
-	if i.logWin.Confirm("Restart Steam?", "A Steam restart is recommended to refresh the library. Restart now?") {
-		i.logWin.Log("Shutting down Steam...")
+	if i.logWin.Confirm("Restart Steam?", "Proton settings require a Steam restart to take effect. Restart now?") {
 		i.steam.RestartSteam()
-		i.logWin.Log("Steam has been restarted.")
+	} else {
+		i.logWin.Log("Please restart Steam manually to apply Proton settings.")
 	}
-	
-	// Show completion screen with quit button
-	i.logWin.ShowComplete()
-	i.logWin.Wait()
 
 	return nil
 }
@@ -274,4 +278,112 @@ func runCommand(name string, args ...string) error {
 	cmd.Stdout = nil
 	cmd.Stderr = nil
 	return cmd.Start()
+}
+
+func waitForSteamGameToExit(gameID string, logger func(string)) error {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return err
+	}
+	
+	// Path to Steam's console log
+	logPath := filepath.Join(home, ".local", "share", "Steam", "logs", "console-linux.txt")
+	
+	// Check if log file exists
+	if _, err := os.Stat(logPath); os.IsNotExist(err) {
+		return errors.New("Steam log file not found")
+	}
+	
+	// Get initial file size to start reading from the end
+	fileInfo, err := os.Stat(logPath)
+	if err != nil {
+		return err
+	}
+	offset := fileInfo.Size()
+	
+	logger("Waiting for installer to start...")
+	
+	// Track PIDs for this game
+	activePIDs := make(map[int]bool)
+	hasStarted := false
+	
+	ticker := time.NewTicker(500 * time.Millisecond)
+	defer ticker.Stop()
+	
+	timeout := time.After(5 * time.Minute) // 5 minute timeout
+	
+	for {
+		select {
+		case <-timeout:
+			return errors.New("timeout waiting for installer")
+			
+		case <-ticker.C:
+			file, err := os.Open(logPath)
+			if err != nil {
+				continue
+			}
+			
+			// Seek to last known position
+			file.Seek(offset, 0)
+			
+			// Read new content
+			buf := make([]byte, 8192)
+			n, _ := file.Read(buf)
+			if n > 0 {
+				offset += int64(n)
+				content := string(buf[:n])
+				lines := strings.Split(content, "\n")
+				
+				for _, line := range lines {
+					// Look for "Adding process [PID] for gameID [ID]"
+					if strings.Contains(line, "Adding process") && strings.Contains(line, "for gameID "+gameID) {
+						parts := strings.Fields(line)
+						for i, part := range parts {
+							if part == "process" && i+1 < len(parts) {
+								if pid, err := strconv.Atoi(parts[i+1]); err == nil {
+									activePIDs[pid] = true
+									if !hasStarted {
+										logger("Installer started (tracking " + strconv.Itoa(len(activePIDs)) + " process(es))")
+										hasStarted = true
+									}
+								}
+								break
+							}
+						}
+					}
+					
+					// Look for "Removing process [PID] for gameID [ID]"
+					if strings.Contains(line, "Removing process") && strings.Contains(line, "for gameID "+gameID) {
+						parts := strings.Fields(line)
+						for i, part := range parts {
+							if part == "process" && i+1 < len(parts) {
+								if pid, err := strconv.Atoi(parts[i+1]); err == nil {
+									delete(activePIDs, pid)
+								}
+								break
+							}
+						}
+					}
+				}
+			}
+			file.Close()
+			
+			// If we've seen processes start and all have exited, we're done
+			if hasStarted && len(activePIDs) == 0 {
+				return nil
+			}
+			
+			// Update status periodically (every 4 seconds = 8 ticks)
+			if hasStarted && len(activePIDs) > 0 {
+				// Only log occasionally to avoid spam
+				static := struct {
+					counter int
+				}{}
+				static.counter++
+				if static.counter%8 == 0 {
+					logger("Installer running (" + strconv.Itoa(len(activePIDs)) + " process(es) active)...")
+				}
+			}
+		}
+	}
 }
