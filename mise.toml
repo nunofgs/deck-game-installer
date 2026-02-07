@@ -9,8 +9,8 @@ run = "rm -f $HOME/.local/bin/deck-game-installer && GOBIN=$HOME/.local/bin go i
 description = "Install the Dolphin service menu"
 run = """
 mkdir -p ~/.local/share/kio/servicemenus/
-cp install-to-steam.desktop ~/.local/share/kio/servicemenus/
-chmod +x ~/.local/share/kio/servicemenus/install-to-steam.desktop
+cp install-with-steam.desktop ~/.local/share/kio/servicemenus/
+chmod +x ~/.local/share/kio/servicemenus/install-with-steam.desktop
 """
 
 [tasks.install]
