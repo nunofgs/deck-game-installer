@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	"deck-game-installer/internal/vdf"
+	"deck-game-installer/vdf"
 )
 
 type Manager struct {

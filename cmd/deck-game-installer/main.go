@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"os"
 
-	"deck-game-installer/internal/gui"
-	"deck-game-installer/internal/installer"
+	"deck-game-installer/gui"
+	"deck-game-installer/installer"
 )
 
 func usage() {

@@ -7,10 +7,10 @@ import (
 	"strings"
 	"time"
 
-	"deck-game-installer/internal/gui"
-	"deck-game-installer/internal/iso"
-	"deck-game-installer/internal/proton"
-	"deck-game-installer/internal/steam"
+	"deck-game-installer/gui"
+	"deck-game-installer/iso"
+	"deck-game-installer/proton"
+	"deck-game-installer/steam"
 )
 
 type Installer struct {

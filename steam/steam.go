@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"time"
 
-	"deck-game-installer/internal/vdf"
+	"deck-game-installer/vdf"
 )
 
 type Manager struct {
