@@ -1,6 +1,8 @@
 # Claude Development Notes
 
-## Running Commands
+> See [README.md](README.md) for project overview and documentation.
+
+## Development Commands
 
 This project uses `mise` for managing tool versions. When running commands, always use:
 

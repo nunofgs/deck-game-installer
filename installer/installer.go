@@ -257,7 +257,7 @@ func pickDefaultProton(versions []string) string {
 
 func gameNameFromPath(isoPath, mountPoint string) string {
 	base := filepath.Base(mountPoint)
-	if strings.HasPrefix(base, "steamer_mnt_") || len(base) <= 3 {
+	if strings.HasPrefix(base, "deck-game-installer_mnt_") || len(base) <= 3 {
 		return strings.TrimSuffix(filepath.Base(isoPath), filepath.Ext(isoPath))
 	}
 	return base

@@ -218,7 +218,7 @@ func NewLogWindow(title string) *LogWindow {
 	w.SetContent(content)
 
 	// Open log file
-	logPath := filepath.Join(os.TempDir(), "steamer-debug.log")
+	logPath := filepath.Join(os.TempDir(), "deck-game-installer-debug.log")
 	logFile, _ := os.Create(logPath)
 
 	lw := &LogWindow{
@@ -242,7 +242,7 @@ func NewLogWindow(title string) *LogWindow {
 	}
 
 	if logFile != nil {
-		fmt.Fprintf(logFile, "=== Steamer Debug Log ===\n")
+		fmt.Fprintf(logFile, "=== Deck Game Installer Debug Log ===\n")
 		fmt.Fprintf(logFile, "Log file: %s\n\n", logPath)
 	}
 

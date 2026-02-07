@@ -148,6 +148,20 @@ func (m *Manager) ScanPrefixForExecutables(appID int32) []string {
 		regexp.MustCompile(`installer\.exe`),
 		regexp.MustCompile(`.*redist.*\.exe`),
 		regexp.MustCompile(`.*crash.*reporter.*\.exe`),
+		// Windows system files
+		regexp.MustCompile(`wordpad\.exe`),
+		regexp.MustCompile(`notepad\.exe`),
+		regexp.MustCompile(`wmplayer\.exe`),
+		regexp.MustCompile(`mspaint\.exe`),
+		regexp.MustCompile(`explorer\.exe`),
+		regexp.MustCompile(`iexplore\.exe`),
+		regexp.MustCompile(`cmd\.exe`),
+		regexp.MustCompile(`powershell\.exe`),
+		regexp.MustCompile(`regedit\.exe`),
+		regexp.MustCompile(`taskmgr\.exe`),
+		regexp.MustCompile(`control\.exe`),
+		// Unity crash handler
+		regexp.MustCompile(`.*crashhandler.*\.exe`),
 	}
 
 	var executables []string

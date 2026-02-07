@@ -75,7 +75,7 @@ func (m *Manager) Mount(path string) (string, error) {
 
 func (m *Manager) MountRoot(path string) (string, error) {
 	m.logFn("Creating temporary mount directory...")
-	tmp, err := os.MkdirTemp("", "steamer_mnt_")
+	tmp, err := os.MkdirTemp("", "deck-game-installer_mnt_")
 	if err != nil {
 		return "", err
 	}

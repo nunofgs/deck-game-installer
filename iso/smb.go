@@ -42,7 +42,7 @@ func RemountSMB(info *SMBInfo) (*SMBMount, error) {
 	}
 
 	// If we get here, no existing mount was found
-	mnt, err := os.MkdirTemp("", "steamer_smb_")
+	mnt, err := os.MkdirTemp("", "deck-game-installer_smb_")
 	if err != nil {
 		return nil, err
 	}
