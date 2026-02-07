@@ -60,7 +60,8 @@ func (i *Installer) installFromISO(path string) error {
 	if smb := iso.ParseKioPath(path); smb != nil {
 		i.logWin.Log("\n--- DETECTED NETWORK SHARE ---")
 		i.logWin.Log("Server: " + smb.Server + ", Share: " + smb.Share)
-		i.logWin.Log("Automatically remounting SMB share as system drive (requires admin password)...")
+		i.logWin.Log("Looking for share: //" + smb.Server + "/" + smb.Share)
+		i.logWin.Log("Checking for existing SMB mount...")
 
 		m, err := iso.RemountSMB(smb)
 		if err != nil {
@@ -68,8 +69,8 @@ func (i *Installer) installFromISO(path string) error {
 		} else {
 			smbMount = m
 			path = filepath.Join(m.MountPoint, smb.RelPath)
-			i.logWin.Log("SMB Share remounted at: " + m.MountPoint)
-			i.logWin.Log("New ISO Path: " + path)
+			i.logWin.Log("Using SMB mount at: " + m.MountPoint)
+			i.logWin.Log("ISO will be accessed at: " + path)
 		}
 	}
 

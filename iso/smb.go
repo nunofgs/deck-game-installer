@@ -34,12 +34,19 @@ func ParseKioPath(path string) *SMBInfo {
 }
 
 func RemountSMB(info *SMBInfo) (*SMBMount, error) {
+	shareUNC := "//" + info.Server + "/" + info.Share
+
+	// Check if this share is already mounted
+	if existing := findExistingSMBMount(shareUNC); existing != "" {
+		return &SMBMount{MountPoint: existing}, nil
+	}
+
+	// If we get here, no existing mount was found
 	mnt, err := os.MkdirTemp("", "steamer_smb_")
 	if err != nil {
 		return nil, err
 	}
 
-	shareUNC := "//" + info.Server + "/" + info.Share
 	uid := os.Getuid()
 	gid := os.Getgid()
 	options := fmt.Sprintf("ro,guest,uid=%d,gid=%d", uid, gid)
@@ -52,6 +59,36 @@ func RemountSMB(info *SMBInfo) (*SMBMount, error) {
 
 	absMount, _ := filepath.Abs(mnt)
 	return &SMBMount{MountPoint: absMount}, nil
+}
+
+func findExistingSMBMount(shareUNC string) string {
+	// Use mount command to find existing CIFS mounts
+	cmd := exec.Command("mount", "-t", "cifs")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return ""
+	}
+
+	// Normalize the share UNC for comparison (case-insensitive)
+	shareUNCLower := strings.ToLower(shareUNC)
+
+	// Parse mount output to find matching share
+	// Format: //server/share on /mount/point type cifs (options)
+	lines := strings.Split(string(out), "\n")
+	for _, line := range lines {
+		lineLower := strings.ToLower(line)
+		if strings.HasPrefix(lineLower, shareUNCLower) || strings.Contains(lineLower, shareUNCLower+" on ") {
+			parts := strings.Split(line, " on ")
+			if len(parts) >= 2 {
+				mountParts := strings.Split(parts[1], " type ")
+				if len(mountParts) >= 1 {
+					return strings.TrimSpace(mountParts[0])
+				}
+			}
+		}
+	}
+
+	return ""
 }
 
 func (m *SMBMount) Unmount() error {

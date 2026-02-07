@@ -11,10 +11,11 @@ import (
 )
 
 type Manager struct {
-	loopDevice string
-	mountPoint string
-	isRoot     bool
-	logFn      func(string)
+	loopDevice  string
+	mountPoint  string
+	isRoot      bool
+	wasExisting bool
+	logFn       func(string)
 }
 
 func NewManager() *Manager {
@@ -29,10 +30,12 @@ func (m *Manager) SetLogger(logFn func(string)) {
 
 func (m *Manager) Mount(path string) (string, error) {
 	m.logFn("Checking for existing mount...")
+	m.logFn("ISO path to check: " + path)
 	if existing, err := findExistingMount(path); err == nil && existing != nil {
 		m.loopDevice = existing.loopDevice
 		m.mountPoint = existing.mountPoint
 		m.isRoot = false
+		m.wasExisting = true
 		m.logFn("Found existing mount at: " + m.mountPoint)
 		return m.mountPoint, nil
 	}
@@ -65,6 +68,7 @@ func (m *Manager) Mount(path string) (string, error) {
 
 	m.mountPoint = strings.TrimRight(mpMatch[1], ".")
 	m.isRoot = false
+	m.wasExisting = false
 	m.logFn("Successfully mounted at: " + m.mountPoint)
 	return m.mountPoint, nil
 }
@@ -89,11 +93,20 @@ func (m *Manager) MountRoot(path string) (string, error) {
 
 	m.mountPoint = tmp
 	m.isRoot = true
+	m.wasExisting = false
 	m.logFn("Successfully mounted with elevated permissions at: " + tmp)
 	return m.mountPoint, nil
 }
 
 func (m *Manager) Unmount() {
+	// Don't unmount if we found an existing mount
+	if m.wasExisting {
+		m.mountPoint = ""
+		m.loopDevice = ""
+		m.wasExisting = false
+		return
+	}
+
 	if m.isRoot && m.mountPoint != "" {
 		_ = exec.Command("pkexec", "umount", m.mountPoint).Run()
 		_ = os.RemoveAll(m.mountPoint)
@@ -119,8 +132,33 @@ type existingMount struct {
 }
 
 func findExistingMount(path string) (*existingMount, error) {
-	cmd := exec.Command("losetup", "-j", path)
+	// Get the basename for matching (useful when path includes temp directories)
+	basename := filepath.Base(path)
+	
+	// First check if the ISO is already mounted via mount table
+	absPath, _ := filepath.Abs(path)
+	cmd := exec.Command("mount")
 	out, err := cmd.CombinedOutput()
+	if err == nil {
+		lines := strings.Split(string(out), "\n")
+		for _, line := range lines {
+			// Match either by exact path or by basename for temp-mounted ISOs
+			if (strings.Contains(line, absPath) || strings.Contains(line, basename)) && strings.Contains(line, " on ") {
+				parts := strings.Split(line, " on ")
+				if len(parts) >= 2 {
+					mountParts := strings.Split(parts[1], " type ")
+					if len(mountParts) >= 1 {
+						mp := strings.TrimSpace(mountParts[0])
+						return &existingMount{loopDevice: "", mountPoint: mp}, nil
+					}
+				}
+			}
+		}
+	}
+
+	// Then check for loop devices
+	cmd = exec.Command("losetup", "-j", path)
+	out, err = cmd.CombinedOutput()
 	if err != nil || len(strings.TrimSpace(string(out))) == 0 {
 		return nil, errors.New("no existing mount")
 	}

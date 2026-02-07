@@ -3,6 +3,8 @@ package gui
 import (
 	"fmt"
 	"image/color"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 
@@ -62,6 +64,8 @@ type LogWindow struct {
 	okCh      chan struct{}
 	cancelCh  chan struct{}
 	closeOnce sync.Once
+	
+	logFile   *os.File
 }
 
 func (l *LogWindow) runOnUI(fn func()) {
@@ -213,6 +217,10 @@ func NewLogWindow(title string) *LogWindow {
 
 	w.SetContent(content)
 
+	// Open log file
+	logPath := filepath.Join(os.TempDir(), "steamer-debug.log")
+	logFile, _ := os.Create(logPath)
+
 	lw := &LogWindow{
 		app:              a,
 		window:           w,
@@ -230,6 +238,12 @@ func NewLogWindow(title string) *LogWindow {
 		quitBtn:          quitBtn,
 		okCh:             okCh,
 		cancelCh:         cancelCh,
+		logFile:          logFile,
+	}
+
+	if logFile != nil {
+		fmt.Fprintf(logFile, "=== Steamer Debug Log ===\n")
+		fmt.Fprintf(logFile, "Log file: %s\n\n", logPath)
 	}
 
 	w.SetCloseIntercept(func() {
@@ -255,8 +269,11 @@ func (l *LogWindow) Close() {
 }
 
 func (l *LogWindow) Log(message string) {
-	// Logs are now just used internally, not displayed
-	// Keep this method for backward compatibility
+	// Write to log file for debugging
+	if l.logFile != nil {
+		fmt.Fprintln(l.logFile, message)
+		l.logFile.Sync()
+	}
 }
 
 func (l *LogWindow) SetGameName(name string) {
