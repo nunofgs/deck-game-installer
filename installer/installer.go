@@ -39,8 +39,10 @@ func (i *Installer) Install(path string) error {
 	ext := strings.ToLower(filepath.Ext(path))
 	switch ext {
 	case ".iso":
+		i.logWin.ConfigureSteps([]string{"Initialize", "Mount ISO", "Add to Steam", "Run Installer", "Find Game", "Unmount ISO", "Steam Restart", "Done"})
 		return i.installFromISO(path)
 	case ".exe":
+		i.logWin.ConfigureSteps([]string{"Initialize", "Add to Steam", "Run Installer", "Find Game", "Steam Restart", "Done"})
 		return i.installFromExe(path)
 	default:
 		return errors.New("unsupported file type: " + ext)
@@ -67,15 +69,9 @@ func (i *Installer) installFromISO(path string) error {
 	}
 
 	defer func() {
-		i.logWin.Log("\n--- CLEANING UP ---")
-		i.logWin.Log("Unmounting ISO...")
-		i.isoMgr.Unmount()
-		if smbMount != nil {
-			i.logWin.Log("Unmounting temporary SMB share...")
-			_ = smbMount.Unmount()
-		}
 		i.logWin.Log("\n--- INSTALLATION FINISHED ---")
-		i.logWin.WaitWithSingleButton("Everything cleaned up. You may now close this window.", "Close")
+		i.logWin.SetStep(gui.StepDone)
+		i.logWin.WaitWithSingleButton("Installation complete. You may now close this window.", "Close")
 		i.logWin.Close()
 	}()
 
@@ -111,15 +107,15 @@ func (i *Installer) installFromISO(path string) error {
 	}
 
 	i.logWin.Log("Selected installer: " + selected)
-	return i.runInstallationWorkflow(selected, gameNameFromPath(path, mountPoint))
+	return i.runInstallationWorkflow(selected, gameNameFromPath(path, mountPoint), i.isoMgr, smbMount)
 }
 
 func (i *Installer) installFromExe(path string) error {
 	i.logWin.Log("Selected installer: " + path)
-	return i.runInstallationWorkflow(path, strings.TrimSuffix(filepath.Base(path), filepath.Ext(path)))
+	return i.runInstallationWorkflow(path, strings.TrimSuffix(filepath.Base(path), filepath.Ext(path)), nil, nil)
 }
 
-func (i *Installer) runInstallationWorkflow(installerPath, gameName string) error {
+func (i *Installer) runInstallationWorkflow(installerPath, gameName string, isoManager *iso.Manager, smbMount *iso.SMBMount) error {
 	i.logWin.SetStep(gui.StepAddToSteam)
 	i.logWin.Log("\n--- STEP 3: ADDING TO STEAM ---")
 
@@ -231,8 +227,6 @@ func (i *Installer) runInstallationWorkflow(installerPath, gameName string) erro
 	}
 	selectedExe := choice
 
-	i.logWin.Log("\n--- STEP 6: DONE ---")
-	i.logWin.SetStep(gui.StepDone)
 	i.logWin.Log("Updating Steam shortcut to point to game executable...")
 	i.logWin.Log("Game exe: " + selectedExe)
 	
@@ -244,14 +238,31 @@ func (i *Installer) runInstallationWorkflow(installerPath, gameName string) erro
 
 	i.logWin.Log("\nSuccessfully completed installation!")
 	i.logWin.Log("The game will use " + defaultProton + ".")
-	i.logWin.Log("Steam needs to be restarted to recognize the updated shortcut.")
+	
+	// Unmount ISO if this was an ISO installation
+	if isoManager != nil {
+		i.logWin.Log("\n--- UNMOUNTING ISO ---")
+		i.logWin.SetStep(gui.StepUnmountISO)
+		i.logWin.Log("Cleaning up temporary files...")
+		isoManager.Unmount()
+		if smbMount != nil {
+			i.logWin.Log("Unmounting temporary SMB share...")
+			_ = smbMount.Unmount()
+		}
+		i.logWin.Log("ISO unmounted successfully.")
+	}
+	
+	i.logWin.Log("\nSteam needs to be restarted to recognize the updated shortcut.")
 	
 	// Show Restart Steam button with custom message
+	i.logWin.SetStep(gui.StepRestartSteam)
 	i.logWin.SetButtons("Restart Steam", "")
 	if i.logWin.WaitWithMessage("Game installed successfully. Restart Steam to play your game.") {
 		i.logWin.Log("Restarting Steam...")
 		i.steam.RestartSteam()
 		i.logWin.Log("Steam has been restarted. You can now launch your game from Steam!")
+		
+		i.logWin.SetStep(gui.StepDone)
 	}
 
 	return nil

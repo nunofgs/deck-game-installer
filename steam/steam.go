@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -231,6 +232,13 @@ func (m *Manager) UpdateShortcut(appID int32, newExePath, newStartDir string) er
 			}
 			entry["StartDir"] = newStartDir
 			
+			// Remove "(Installer)" suffix from the app name if present
+			if appName, ok := entry["AppName"].(string); ok {
+				if len(appName) > 12 && appName[len(appName)-12:] == " (Installer)" {
+					entry["AppName"] = appName[:len(appName)-12]
+				}
+			}
+			
 			// Write back to file
 			newData, err := WriteBinaryVDF(obj)
 			if err != nil {
@@ -350,11 +358,13 @@ func ensureNestedMap(root map[string]any, keys ...string) map[string]any {
 func (m *Manager) RestartSteam() {
 	// Kill Steam gracefully first
 	_ = exec.Command("steam", "-shutdown").Run()
-	time.Sleep(2 * time.Second)
 	
-	// Force kill if still running
-	_ = exec.Command("pkill", "-x", "steam").Run()
-	time.Sleep(1 * time.Second)
+	// Wait for Steam to actually shut down by monitoring its log
+	if err := m.waitForSteamShutdown(); err != nil {
+		// If monitoring fails, fall back to force kill
+		_ = exec.Command("pkill", "-x", "steam").Run()
+		time.Sleep(2 * time.Second)
+	}
 	
 	// Start Steam in background, fully detached from this process
 	cmd := exec.Command("steam")
@@ -369,6 +379,76 @@ func (m *Manager) RestartSteam() {
 	// Release the process so it's not tied to this parent
 	if cmd.Process != nil {
 		_ = cmd.Process.Release()
+	}
+}
+
+func (m *Manager) waitForSteamShutdown() error {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return err
+	}
+	
+	// Path to Steam's console log
+	logPath := filepath.Join(home, ".local", "share", "Steam", "logs", "console-linux.txt")
+	
+	// Check if log file exists
+	if _, err := os.Stat(logPath); os.IsNotExist(err) {
+		return errors.New("Steam log file not found")
+	}
+	
+	// Get initial file size to start reading from the end
+	fileInfo, err := os.Stat(logPath)
+	if err != nil {
+		return err
+	}
+	offset := fileInfo.Size()
+	
+	ticker := time.NewTicker(200 * time.Millisecond)
+	defer ticker.Stop()
+	
+	timeout := time.After(15 * time.Second) // 15 second timeout for shutdown
+	
+	for {
+		select {
+		case <-timeout:
+			return errors.New("timeout waiting for Steam shutdown")
+			
+		case <-ticker.C:
+			// Check if steam process is still running
+			cmd := exec.Command("pgrep", "-x", "steam")
+			if err := cmd.Run(); err != nil {
+				// Process not found, Steam has shut down
+				time.Sleep(500 * time.Millisecond)
+				return nil
+			}
+			
+			file, err := os.Open(logPath)
+			if err != nil {
+				continue
+			}
+			
+			// Seek to last known position
+			file.Seek(offset, 0)
+			
+			// Read new content
+			buf := make([]byte, 8192)
+			n, _ := file.Read(buf)
+			if n > 0 {
+				offset += int64(n)
+				content := string(buf[:n])
+				
+				// Look for shutdown messages in Steam log
+				if strings.Contains(content, "Exiting") || 
+				   strings.Contains(content, "Shutdown") ||
+				   strings.Contains(content, "Steam_Shutdown") {
+					file.Close()
+					// Give it a moment to fully terminate
+					time.Sleep(500 * time.Millisecond)
+					return nil
+				}
+			}
+			file.Close()
+		}
 	}
 }
 

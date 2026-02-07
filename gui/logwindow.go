@@ -25,6 +25,8 @@ const (
 	StepAddToSteam     = "Adding to Steam"
 	StepRunInstaller   = "Running Installer"
 	StepFindGame       = "Finding Game"
+	StepUnmountISO     = "Unmount ISO"
+	StepRestartSteam   = "Steam Restart"
 	StepDone           = "Done"
 )
 
@@ -94,12 +96,15 @@ func NewLogWindow(title string) *LogWindow {
 	w := a.NewWindow(title)
 	w.Resize(fyne.NewSize(700, 400))
 
+	// Start with all possible steps - will be configured based on install type
 	steps := []string{
 		"Initialize",
 		"Mount ISO",
 		"Add to Steam",
 		"Run Installer",
 		"Find Game",
+		"Unmount ISO",
+		"Steam Restart",
 		"Done",
 	}
 
@@ -115,9 +120,8 @@ func NewLogWindow(title string) *LogWindow {
 	inactiveColor := color.NRGBA{R: 200, G: 200, B: 200, A: 255}
 	lineColor := color.NRGBA{R: 200, G: 200, B: 200, A: 255}
 	
-	// Create the background line that spans the entire width
+	// Create the background line that will expand to fill width
 	backgroundLine := canvas.NewRectangle(lineColor)
-	backgroundLine.SetMinSize(fyne.NewSize(550, 3))
 	
 	// Create paired circle+label items with fixed widths for alignment
 	var stepContainers []fyne.CanvasObject
@@ -151,34 +155,30 @@ func NewLogWindow(title string) *LogWindow {
 	// Build the horizontal row with spacers
 	stepsRow := container.NewHBox()
 	for i, stepBox := range stepContainers {
-		if i > 0 {
-			stepsRow.Add(layout.NewSpacer())
-		}
 		stepsRow.Add(stepBox)
 		if i < len(stepContainers)-1 {
 			stepsRow.Add(layout.NewSpacer())
 		}
 	}
 	
-	// Create a container with padding to position the line at circle center (5px down for 20px circles)
+	// Create a line with proper padding that expands to full width
 	linePadding := canvas.NewRectangle(color.Transparent)
 	linePadding.SetMinSize(fyne.NewSize(1, 5))
 	
-	// Add horizontal padding to inset the line
-	leftPad := canvas.NewRectangle(color.Transparent)
-	leftPad.SetMinSize(fyne.NewSize(35, 3))
-	rightPad := canvas.NewRectangle(color.Transparent)
-	rightPad.SetMinSize(fyne.NewSize(35, 3))
+	// Set the line to have a fixed height but expand horizontally
+	backgroundLine.SetMinSize(fyne.NewSize(1, 3))
 	
-	lineWithHorizontalPadding := container.NewHBox(
-		leftPad,
-		backgroundLine,
-		rightPad,
-	)
+	// Create padded line container with Border layout to ensure full width
+	leftPad := canvas.NewRectangle(color.Transparent)
+	leftPad.SetMinSize(fyne.NewSize(30, 3))
+	rightPad := canvas.NewRectangle(color.Transparent)
+	rightPad.SetMinSize(fyne.NewSize(30, 3))
+	
+	lineRow := container.NewBorder(nil, nil, leftPad, rightPad, backgroundLine)
 	
 	lineWithOffset := container.NewVBox(
 		linePadding,
-		lineWithHorizontalPadding,
+		lineRow,
 	)
 	
 	// Stack the line behind the circles
@@ -305,20 +305,56 @@ func (l *LogWindow) SetGameName(name string) {
 	})
 }
 
+func (l *LogWindow) ConfigureSteps(stepLabels []string) {
+	l.runOnUI(func() {
+		// Update the step labels to show only the relevant steps
+		// and hide the ones not in use
+		l.steps = stepLabels
+		
+		// Update visible labels
+		for i := range l.stepLabels {
+			if i < len(stepLabels) {
+				l.stepLabels[i].SetText(stepLabels[i])
+				l.stepLabels[i].Show()
+				l.stepCircles[i].Show()
+			} else {
+				// Hide unused steps
+				l.stepLabels[i].Hide()
+				l.stepCircles[i].Hide()
+			}
+		}
+	})
+}
+
 func (l *LogWindow) SetStep(name string) {
 	l.runOnUI(func() {
-		// Map step names to indices
-		stepMap := map[string]int{
-			StepInitialize:   0,
-			StepMountISO:     1,
-			StepAddToSteam:   2,
-			StepRunInstaller: 3,
-			StepFindGame:     4,
-			StepDone:         5,
+		// Map step name constants to short labels used in the UI
+		stepShortNames := map[string]string{
+			StepInitialize:   "Initialize",
+			StepMountISO:     "Mount ISO",
+			StepAddToSteam:   "Add to Steam",
+			StepRunInstaller: "Run Installer",
+			StepFindGame:     "Find Game",
+			StepUnmountISO:   "Unmount ISO",
+			StepRestartSteam: "Steam Restart",
+			StepDone:         "Done",
 		}
-
-		stepIndex, ok := stepMap[name]
-		if !ok {
+		
+		shortName := stepShortNames[name]
+		if shortName == "" {
+			return
+		}
+		
+		// Find the step index in the current configured steps
+		stepIndex := -1
+		for i, step := range l.steps {
+			if step == shortName {
+				stepIndex = i
+				break
+			}
+		}
+		
+		if stepIndex == -1 {
 			return
 		}
 
@@ -370,6 +406,10 @@ func (l *LogWindow) getStepSubtitle(step string) string {
 		return "Complete the installation in the game window, then click OK below"
 	case StepFindGame:
 		return "Scanning for installed game files..."
+	case StepUnmountISO:
+		return "Cleaning up temporary files..."
+	case StepRestartSteam:
+		return "Waiting for Steam to restart..."
 	case StepDone:
 		return "Your game is now installed. Enjoy!"
 	default:
@@ -463,6 +503,12 @@ func (l *LogWindow) SetButtons(okLabel, cancelLabel string) {
 	})
 }
 
+func (l *LogWindow) UpdateSubtitle(message string) {
+	l.runOnUI(func() {
+		l.subtitleLabel.SetText(message)
+	})
+}
+
 func (l *LogWindow) Confirm(title, message string) bool {
 	resp := make(chan bool, 1)
 	l.runOnUI(func() {
@@ -552,6 +598,12 @@ func (l *LogWindow) Select(title, prompt string, options []string) (string, bool
 		if id >= 0 && id < len(options) {
 			selected = options[id]
 		}
+	}
+	
+	// Pre-select the first item if there's only one option
+	if len(options) == 1 {
+		selected = options[0]
+		list.Select(0)
 	}
 
 	content := container.NewBorder(
