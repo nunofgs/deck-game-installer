@@ -8,6 +8,7 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
+	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/layout"
@@ -43,22 +44,23 @@ func (t lightReadableTheme) Size(name fyne.ThemeSizeName) float32 {
 }
 
 type LogWindow struct {
-	app    fyne.App
-	window fyne.Window
-	text   *widget.Label
-	okBtn  *widget.Button
-	cancelBtn *widget.Button
-	stepList *widget.List
-	steps []string
-	stepStatus map[string]string
-	logLines []string
-	logList *widget.List
-	stepTitle *widget.Label
-	stepSubtitle *widget.Label
-	buttonContainer *fyne.Container
+	app              fyne.App
+	window           fyne.Window
+	gameName         string
+	titleLabel       *widget.Label
+	subtitleLabel    *widget.Label
+	stepCircles      []*canvas.Circle
+	stepLabels       []*widget.Label
+	backgroundLine   *canvas.Rectangle
+	steps            []string
+	currentStepIndex int
+	buttonContainer  *fyne.Container
+	okBtn            *widget.Button
+	cancelBtn        *widget.Button
+	quitBtn          *widget.Button
 
-	okCh     chan struct{}
-	cancelCh chan struct{}
+	okCh      chan struct{}
+	cancelCh  chan struct{}
 	closeOnce sync.Once
 }
 
@@ -74,55 +76,102 @@ func NewLogWindow(title string) *LogWindow {
 	a := app.New()
 	a.Settings().SetTheme(lightReadableTheme{})
 	w := a.NewWindow(title)
-	w.Resize(fyne.NewSize(900, 560))
-
-	text := widget.NewLabel("")
-	text.Wrapping = fyne.TextWrapWord
-	text.TextStyle = fyne.TextStyle{Monospace: true}
-
-	stepTitle := widget.NewLabelWithStyle("Initializing", fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
-	stepSubtitle := widget.NewLabel("Starting installation process...")
+	w.Resize(fyne.NewSize(700, 400))
 
 	steps := []string{
-		"Initializing",
-		"Mounting ISO",
-		"Adding to Steam",
-		"Running Installer",
-		"Finding Game",
-		"Finalizing",
-	}
-	stepStatus := map[string]string{}
-	for _, s := range steps {
-		stepStatus[s] = "pending"
+		"Initialize",
+		"Mount ISO",
+		"Add to Steam",
+		"Run Installer",
+		"Find Game",
+		"Finalize",
 	}
 
-	stepList := widget.NewList(
-		func() int { return len(steps) },
-		func() fyne.CanvasObject {
-			icon := widget.NewLabel("")
-			name := widget.NewLabel("")
-			name.Wrapping = fyne.TextWrapOff
-			name.Resize(fyne.NewSize(180, name.MinSize().Height))
-			return container.NewHBox(icon, name)
-		},
-		func(i widget.ListItemID, o fyne.CanvasObject) {
-			row := o.(*fyne.Container).Objects
-			icon := row[0].(*widget.Label)
-			label := row[1].(*widget.Label)
-			name := steps[i]
-			switch stepStatus[name] {
-			case "done":
-				icon.SetText("✔")
-				label.SetText(name)
-			case "current":
-				icon.SetText("▶")
-				label.SetText(name)
-			default:
-				icon.SetText("•")
-				label.SetText(name)
-			}
-		},
+	titleLabel := widget.NewLabelWithStyle("Installing to Steam", fyne.TextAlignCenter, fyne.TextStyle{Bold: true})
+	titleLabel.TextStyle.Bold = true
+	
+	subtitleLabel := widget.NewLabelWithStyle("Starting installation process...", fyne.TextAlignCenter, fyne.TextStyle{})
+	
+	// Create horizontal timeline with circles on a line
+	var stepCircles []*canvas.Circle
+	var stepLabels []*widget.Label
+	
+	inactiveColor := color.NRGBA{R: 200, G: 200, B: 200, A: 255}
+	lineColor := color.NRGBA{R: 200, G: 200, B: 200, A: 255}
+	
+	// Create the background line that spans the entire width
+	backgroundLine := canvas.NewRectangle(lineColor)
+	backgroundLine.SetMinSize(fyne.NewSize(550, 3))
+	
+	// Create paired circle+label items with fixed widths for alignment
+	var stepContainers []fyne.CanvasObject
+	
+	for _, step := range steps {
+		// Circle for step - use white fill so the color shows as the stroke
+		circle := canvas.NewCircle(color.White)
+		circle.StrokeColor = inactiveColor
+		circle.StrokeWidth = 3
+		stepCircles = append(stepCircles, circle)
+		
+		// Wrap circle in a sized container to ensure visibility
+		circleBox := canvas.NewRectangle(color.Transparent)
+		circleBox.SetMinSize(fyne.NewSize(20, 20))
+		circleContainer := container.NewStack(circleBox, circle)
+		
+		// Label below circle
+		label := widget.NewLabel(step)
+		label.Alignment = fyne.TextAlignCenter
+		stepLabels = append(stepLabels, label)
+		
+		// Create a vertical container with circle and label, with min width
+		stepBox := container.NewVBox(
+			container.NewCenter(circleContainer),
+			label,
+		)
+		
+		stepContainers = append(stepContainers, stepBox)
+	}
+	
+	// Build the horizontal row with spacers
+	stepsRow := container.NewHBox()
+	for i, stepBox := range stepContainers {
+		if i > 0 {
+			stepsRow.Add(layout.NewSpacer())
+		}
+		stepsRow.Add(stepBox)
+		if i < len(stepContainers)-1 {
+			stepsRow.Add(layout.NewSpacer())
+		}
+	}
+	
+	// Create a container with padding to position the line at circle center (5px down for 20px circles)
+	linePadding := canvas.NewRectangle(color.Transparent)
+	linePadding.SetMinSize(fyne.NewSize(1, 5))
+	
+	// Add horizontal padding to inset the line
+	leftPad := canvas.NewRectangle(color.Transparent)
+	leftPad.SetMinSize(fyne.NewSize(35, 3))
+	rightPad := canvas.NewRectangle(color.Transparent)
+	rightPad.SetMinSize(fyne.NewSize(35, 3))
+	
+	lineWithHorizontalPadding := container.NewHBox(
+		leftPad,
+		backgroundLine,
+		rightPad,
 	)
+	
+	lineWithOffset := container.NewVBox(
+		linePadding,
+		lineWithHorizontalPadding,
+	)
+	
+	// Stack the line behind the circles
+	timelineWithCircles := container.NewStack(
+		lineWithOffset,
+		stepsRow,
+	)
+	
+	timelineContainer := timelineWithCircles
 
 	okCh := make(chan struct{}, 1)
 	cancelCh := make(chan struct{}, 1)
@@ -133,6 +182,7 @@ func NewLogWindow(title string) *LogWindow {
 		default:
 		}
 	})
+	
 	cancelBtn := widget.NewButton("Cancel", func() {
 		select {
 		case cancelCh <- struct{}{}:
@@ -140,45 +190,46 @@ func NewLogWindow(title string) *LogWindow {
 		}
 		a.Quit()
 	})
+	
+	quitBtn := widget.NewButton("Quit", func() {
+		a.Quit()
+	})
 
-	buttonContainer := container.NewHBox(layout.NewSpacer(), okBtn, cancelBtn)
+	buttonContainer := container.NewCenter(container.NewHBox(okBtn, cancelBtn))
 	buttonContainer.Hide()
 
-	logLines := []string{}
-	logList := widget.NewList(
-		func() int { return len(logLines) },
-		func() fyne.CanvasObject { return widget.NewLabel("") },
-		func(i widget.ListItemID, o fyne.CanvasObject) {
-			o.(*widget.Label).SetText(logLines[i])
-		},
+	// Main layout
+	content := container.NewVBox(
+		layout.NewSpacer(),
+		container.NewCenter(titleLabel),
+		widget.NewLabel(""), // spacer
+		container.NewCenter(timelineContainer),
+		widget.NewLabel(""), // spacer
+		container.NewCenter(subtitleLabel),
+		layout.NewSpacer(),
+		buttonContainer,
+		widget.NewLabel(""), // bottom padding
 	)
 
-	stepsCard := widget.NewCard("Steps", "", container.NewVScroll(stepList))
-	logHeader := container.NewVBox(stepTitle, stepSubtitle)
-	logCard := widget.NewCard("Activity", "", container.NewBorder(logHeader, buttonContainer, nil, nil, container.NewVScroll(logList)))
-
-	split := container.NewHSplit(stepsCard, logCard)
-	split.Offset = 0.32
-
-	content := container.NewBorder(nil, nil, nil, nil, split)
 	w.SetContent(content)
 
 	lw := &LogWindow{
-		app:     a,
-		window:  w,
-		text:    text,
-		okBtn:   okBtn,
-		cancelBtn: cancelBtn,
-		buttonContainer: buttonContainer,
-		stepList: stepList,
-		steps: steps,
-		stepStatus: stepStatus,
-		logLines: logLines,
-		logList: logList,
-		stepTitle: stepTitle,
-		stepSubtitle: stepSubtitle,
-		okCh:    okCh,
-		cancelCh: cancelCh,
+		app:              a,
+		window:           w,
+		gameName:         "",
+		titleLabel:       titleLabel,
+		subtitleLabel:    subtitleLabel,
+		stepCircles:      stepCircles,
+		stepLabels:       stepLabels,
+		backgroundLine:   backgroundLine,
+		steps:            steps,
+		currentStepIndex: 0,
+		buttonContainer:  buttonContainer,
+		okBtn:            okBtn,
+		cancelBtn:        cancelBtn,
+		quitBtn:          quitBtn,
+		okCh:             okCh,
+		cancelCh:         cancelCh,
 	}
 
 	w.SetCloseIntercept(func() {
@@ -204,35 +255,67 @@ func (l *LogWindow) Close() {
 }
 
 func (l *LogWindow) Log(message string) {
+	// Logs are now just used internally, not displayed
+	// Keep this method for backward compatibility
+}
+
+func (l *LogWindow) SetGameName(name string) {
 	l.runOnUI(func() {
-		l.logLines = append(l.logLines, message)
-		l.logList.Refresh()
-		// Scroll to the bottom to show the latest log
-		l.logList.ScrollToBottom()
+		l.gameName = name
+		l.titleLabel.SetText("Installing " + name)
 	})
 }
 
 func (l *LogWindow) SetStep(name string) {
 	l.runOnUI(func() {
-		seenCurrent := false
-		for _, step := range l.steps {
-			if step == name {
-				l.stepStatus[step] = "current"
-				seenCurrent = true
-				continue
-			}
-			if !seenCurrent {
-				l.stepStatus[step] = "done"
-			} else if l.stepStatus[step] != "done" {
-				l.stepStatus[step] = "pending"
-			}
+		// Map step names to indices
+		stepMap := map[string]int{
+			"Initializing":      0,
+			"Mounting ISO":      1,
+			"Adding to Steam":   2,
+			"Running Installer": 3,
+			"Finding Game":      4,
+			"Finalizing":        5,
 		}
-		l.stepList.Refresh()
-		l.stepTitle.SetText(name)
-		
-		// Update subtitle with contextual information
+
+		stepIndex, ok := stepMap[name]
+		if !ok {
+			return
+		}
+
+		completeColor := color.NRGBA{R: 76, G: 175, B: 80, A: 255}     // Green
+		inactiveColor := color.NRGBA{R: 200, G: 200, B: 200, A: 255}   // Gray
+
+		l.currentStepIndex = stepIndex
+
+		// Update circles and labels
+		for i := range l.stepCircles {
+			if i < stepIndex {
+				// Completed steps - gray filled circle
+				l.stepCircles[i].FillColor = inactiveColor
+				l.stepCircles[i].StrokeColor = inactiveColor
+				l.stepLabels[i].TextStyle.Bold = false
+			} else if i == stepIndex {
+				// Current step - green filled circle with bold label
+				l.stepCircles[i].FillColor = completeColor
+				l.stepCircles[i].StrokeColor = completeColor
+				l.stepLabels[i].TextStyle.Bold = true
+			} else {
+				// Pending steps - white circle with gray outline
+				l.stepCircles[i].FillColor = color.White
+				l.stepCircles[i].StrokeColor = inactiveColor
+				l.stepLabels[i].TextStyle.Bold = false
+			}
+			l.stepCircles[i].Refresh()
+			l.stepLabels[i].Refresh()
+		}
+
+		// Keep the background line gray always
+		// The circles will show progress with their colors
+
+		// Update subtitle
 		subtitle := l.getStepSubtitle(name)
-		l.stepSubtitle.SetText(subtitle)
+		l.subtitleLabel.SetText(subtitle)
 	})
 }
 
@@ -245,7 +328,7 @@ func (l *LogWindow) getStepSubtitle(step string) string {
 	case "Adding to Steam":
 		return "Configuring Steam library shortcut..."
 	case "Running Installer":
-		return "Action required - Complete the installation in the game window"
+		return "Complete the installation in the game window, then click OK below"
 	case "Finding Game":
 		return "Scanning for installed game files..."
 	case "Finalizing":
@@ -257,8 +340,10 @@ func (l *LogWindow) getStepSubtitle(step string) string {
 
 func (l *LogWindow) Wait() bool {
 	l.runOnUI(func() {
-		l.stepSubtitle.SetText("Waiting for user input...")
+		l.subtitleLabel.SetText("Waiting for user input...")
+		l.buttonContainer.Objects = []fyne.CanvasObject{container.NewHBox(l.okBtn, l.cancelBtn)}
 		l.buttonContainer.Show()
+		l.buttonContainer.Refresh()
 	})
 
 	var res bool
@@ -274,10 +359,22 @@ func (l *LogWindow) Wait() bool {
 		l.okBtn.SetText("OK")
 		l.cancelBtn.SetText("Cancel")
 		// Restore the step-specific subtitle
-		subtitle := l.getStepSubtitle(l.stepTitle.Text)
-		l.stepSubtitle.SetText(subtitle)
+		if l.currentStepIndex < len(l.steps) {
+			stepName := []string{"Initializing", "Mounting ISO", "Adding to Steam", "Running Installer", "Finding Game", "Finalizing"}[l.currentStepIndex]
+			subtitle := l.getStepSubtitle(stepName)
+			l.subtitleLabel.SetText(subtitle)
+		}
 	})
 	return res
+}
+
+func (l *LogWindow) ShowComplete() {
+	l.runOnUI(func() {
+		l.subtitleLabel.SetText("Installation completed successfully!")
+		l.buttonContainer.Objects = []fyne.CanvasObject{container.NewHBox(l.quitBtn)}
+		l.buttonContainer.Show()
+		l.buttonContainer.Refresh()
+	})
 }
 
 func (l *LogWindow) SetButtons(okLabel, cancelLabel string) {

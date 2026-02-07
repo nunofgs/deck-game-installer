@@ -53,6 +53,10 @@ func (i *Installer) Install(path string) error {
 func (i *Installer) installFromISO(path string) error {
 	var smbMount *iso.SMBMount
 
+	// Set game name early
+	gameName := strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
+	i.logWin.SetGameName(gameName)
+
 	if smb := iso.ParseKioPath(path); smb != nil {
 		i.logWin.Log("\n--- DETECTED NETWORK SHARE ---")
 		i.logWin.Log("Server: " + smb.Server + ", Share: " + smb.Share)
@@ -119,8 +123,10 @@ func (i *Installer) installFromISO(path string) error {
 }
 
 func (i *Installer) installFromExe(path string) error {
+	gameName := strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
+	i.logWin.SetGameName(gameName)
 	i.logWin.Log("Selected installer: " + path)
-	return i.runInstallationWorkflow(path, strings.TrimSuffix(filepath.Base(path), filepath.Ext(path)))
+	return i.runInstallationWorkflow(path, gameName)
 }
 
 func (i *Installer) runInstallationWorkflow(installerPath, gameName string) error {
@@ -217,14 +223,17 @@ func (i *Installer) runInstallationWorkflow(installerPath, gameName string) erro
 
 	i.logWin.Log("\nSuccessfully completed installation!")
 	i.logWin.Log("The game will keep using Proton Experimental.")
+	
+	// Ask about restarting Steam
 	if i.logWin.Confirm("Restart Steam?", "A Steam restart is recommended to refresh the library. Restart now?") {
 		i.logWin.Log("Shutting down Steam...")
 		i.steam.RestartSteam()
 		i.logWin.Log("Steam has been restarted.")
-		i.logWin.Log("The game should appear in your library once Steam finishes loading.")
-	} else {
-		i.logWin.Log("Please restart Steam manually to see the updated game.")
 	}
+	
+	// Show completion screen with quit button
+	i.logWin.ShowComplete()
+	i.logWin.Wait()
 
 	return nil
 }
