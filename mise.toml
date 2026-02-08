@@ -3,7 +3,7 @@ go = "1.25.7"
 
 [tasks.app]
 description = "Install the Go application"
-run = "rm -f $HOME/.local/bin/deck-game-installer && GOBIN=$HOME/.local/bin go install ./cmd/deck-game-installer"
+run = "rm -f $HOME/.local/bin/deck-game-installer && GOBIN=$HOME/.local/bin go install ./v2/cmd/deck-game-installer"
 
 [tasks.servicemenu]
 description = "Install the Dolphin service menu"

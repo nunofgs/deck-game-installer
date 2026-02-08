@@ -7,18 +7,18 @@
 This project uses `mise` for managing tool versions. When running commands, always use:
 
 ```bash
-mise exec -- <command>
+/home/linuxbrew/.linuxbrew/bin/mise exec -- <command>
 ```
 
 ### Examples
 
 ```bash
 # Build the project
-mise exec -- go build ./...
+/home/linuxbrew/.linuxbrew/bin/mise exec -- go build ./...
 
 # Run tests
-mise exec -- go test ./...
+/home/linuxbrew/.linuxbrew/bin/mise exec -- go test ./...
 
 # Build specific package
-mise exec -- go build ./cmd/deck-game-installer
+/home/linuxbrew/.linuxbrew/bin/mise exec -- go build ./cmd/deck-game-installer
 ```
