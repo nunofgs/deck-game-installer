@@ -7,6 +7,10 @@
         "/^/home/linuxbrew/\\.linuxbrew/bin/mise exec -C /home/nunofgs/Projects/steamer -- go build \\./v2/\\.\\.\\.$/": {
             "approve": true,
             "matchCommandLine": true
+        },
+        "/^/home/linuxbrew/\\.linuxbrew/bin/mise exec -- go build \\./v2/\\.\\.\\.$/": {
+            "approve": true,
+            "matchCommandLine": true
         }
     }
 }
