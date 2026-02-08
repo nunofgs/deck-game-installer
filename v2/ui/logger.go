@@ -9,7 +9,14 @@ type Logger interface {
 	Log(message string)
 
 	// SetStep updates the UI to show the current step being executed.
+	// Deprecated: Use StepStarted instead for better progress tracking.
 	SetStep(name string)
+
+	// StepStarted marks a step as started and records the start time.
+	StepStarted(name string)
+
+	// StepCompleted marks a step as completed (or failed if err != nil).
+	StepCompleted(name string, err error)
 
 	// ConfigureSteps sets up the list of steps to show in the progress UI.
 	ConfigureSteps(stepNames []string)

@@ -66,8 +66,9 @@ func runInstall(path string) {
 		cancel()
 	}()
 
-	// Create GUI logger
-	logger := ui.NewGUILogger("Deck Game Installer")
+	// Create GUI logger with filename
+	filename := filepath.Base(path)
+	logger := ui.NewGUILogger("Deck Game Installer", filename)
 
 	// Run GUI in background goroutine
 	go func() {
@@ -85,10 +86,11 @@ func runInstall(path string) {
 		// Run the workflow
 		if err := runner.Run(ctx); err != nil {
 			logger.Log(fmt.Sprintf("Installation failed: %v", err))
+			logger.ShowFailure(err.Error())
+		} else {
+			// Show completion and wait for user to quit
+			logger.ShowComplete()
 		}
-
-		// Show completion and wait for user to quit
-		logger.ShowComplete()
 	}()
 
 	// Run GUI on main thread (required by Fyne) - blocks until window closed

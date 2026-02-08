@@ -4,161 +4,132 @@ import (
 	"fmt"
 	"image/color"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"fyne.io/fyne/v2"
-	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
+
+	fyneapp "fyne.io/fyne/v2/app"
 )
 
-// lightReadableTheme provides better contrast for the GUI.
-type lightReadableTheme struct{}
+// Step status constants
+type StepStatusType int
 
-func (t lightReadableTheme) Color(name fyne.ThemeColorName, variant fyne.ThemeVariant) color.Color {
-	if name == theme.ColorNameForeground {
-		return color.NRGBA{R: 0x11, G: 0x11, B: 0x11, A: 0xff}
-	}
-	if name == theme.ColorNameDisabled {
-		return color.NRGBA{R: 0x22, G: 0x22, B: 0x22, A: 0xff}
-	}
-	if name == theme.ColorNameInputBackground {
-		return color.NRGBA{R: 0xff, G: 0xff, B: 0xff, A: 0xff}
-	}
-	return theme.LightTheme().Color(name, variant)
-}
+const (
+	StepPending StepStatusType = iota
+	StepRunning
+	StepCompleted
+	StepFailed
+)
 
-func (t lightReadableTheme) Font(style fyne.TextStyle) fyne.Resource {
-	return theme.LightTheme().Font(style)
-}
+// Colors
+var (
+	colPending   = color.NRGBA{R: 150, G: 150, B: 150, A: 255} // Gray
+	colRunning   = color.NRGBA{R: 255, G: 193, B: 7, A: 255}   // Amber
+	colCompleted = color.NRGBA{R: 76, G: 175, B: 80, A: 255}   // Green
+	colFailed    = color.NRGBA{R: 244, G: 67, B: 54, A: 255}   // Red
+	colLine      = color.NRGBA{R: 180, G: 180, B: 180, A: 255} // Neutral gray for connector lines
+)
 
-func (t lightReadableTheme) Icon(name fyne.ThemeIconName) fyne.Resource {
-	return theme.LightTheme().Icon(name)
-}
-
-func (t lightReadableTheme) Size(name fyne.ThemeSizeName) float32 {
-	return theme.LightTheme().Size(name)
+// StepStatus tracks the state of a single installation step
+type StepStatus struct {
+	Name      string
+	Status    StepStatusType
+	StartTime time.Time
+	EndTime   time.Time
+	Duration  time.Duration
+	Logs      []string
+	Error     error
+	Expanded  bool
 }
 
 // GUILogger implements Logger with a Fyne-based graphical interface.
 type GUILogger struct {
-	app              fyne.App
-	window           fyne.Window
-	titleLabel       *widget.Label
-	subtitleLabel    *widget.Label
-	stepCircles      []*canvas.Circle
-	stepLabels       []*widget.Label
-	steps            []string
-	currentStepIndex int
-	buttonContainer  *fyne.Container
-	okBtn             *widget.Button
-	cancelBtn         *widget.Button
-	quitBtn           *widget.Button
-	manualOverrideBtn *widget.Button
+	app    fyne.App
+	window fyne.Window
 
-	okCh             chan struct{}
-	cancelCh         chan struct{}
-	manualOverrideCh chan struct{}
-	doneCh           chan struct{} // signals when GUI has closed
-	closeOnce        sync.Once
+	// Step tracking
+	stepStatuses   map[string]*StepStatus
+	stepOrder      []string
+	currentStep    string
+	totalSteps     int
+	completedSteps int
+	mu             sync.Mutex
+
+	// UI elements
+	titleLabel     *widget.Label
+	statusLabel    *widget.Label
+	progressBar    *widget.ProgressBar
+	stepListScroll *container.Scroll
+	stepListBox    *fyne.Container
+	bottomBox      *fyne.Container
+	themeBtn       *widget.Button
+
+	// Buttons
+	okBtn        *widget.Button
+	cancelBtn    *widget.Button
+	quitBtn      *widget.Button
+	proceedBtn   *widget.Button
+	openSteamBtn *widget.Button
+	closeBtn     *widget.Button
+
+	// Channels
+	okCh      chan struct{}
+	cancelCh  chan struct{}
+	proceedCh chan struct{}
+	doneCh    chan struct{}
+	closeOnce sync.Once
+
+	// Theme
+	darkMode bool
+	filename string
 
 	logFile *os.File
 }
 
 // NewGUILogger creates a new graphical logger window.
-func NewGUILogger(title string) *GUILogger {
-	a := app.New()
-	a.Settings().SetTheme(lightReadableTheme{})
-	w := a.NewWindow(title)
-	w.Resize(fyne.NewSize(700, 400))
-
-	// Default steps - will be configured based on install type
-	defaultSteps := []string{
-		"Initialize",
-		"Mount ISO",
-		"Add to Steam",
-		"Run Installer",
-		"Find Game",
-		"Cleanup",
-		"Finalize",
-	}
-
-	titleLabel := widget.NewLabelWithStyle("Installing to Steam", fyne.TextAlignCenter, fyne.TextStyle{Bold: true})
-	subtitleLabel := widget.NewLabelWithStyle("Starting installation process...", fyne.TextAlignCenter, fyne.TextStyle{})
-
-	// Create timeline circles and labels
-	var stepCircles []*canvas.Circle
-	var stepLabels []*widget.Label
-	var stepContainers []fyne.CanvasObject
-
-	inactiveColor := color.NRGBA{R: 200, G: 200, B: 200, A: 255}
-
-	for _, step := range defaultSteps {
-		circle := canvas.NewCircle(color.White)
-		circle.StrokeColor = inactiveColor
-		circle.StrokeWidth = 3
-		stepCircles = append(stepCircles, circle)
-
-		circleBox := canvas.NewRectangle(color.Transparent)
-		circleBox.SetMinSize(fyne.NewSize(20, 20))
-		circleContainer := container.NewStack(circleBox, circle)
-
-		label := widget.NewLabel(step)
-		label.Alignment = fyne.TextAlignCenter
-		stepLabels = append(stepLabels, label)
-
-		stepBox := container.NewVBox(
-			container.NewCenter(circleContainer),
-			label,
-		)
-		stepContainers = append(stepContainers, stepBox)
-	}
-
-	// Build horizontal row with spacers
-	stepsRow := container.NewHBox()
-	for i, stepBox := range stepContainers {
-		stepsRow.Add(stepBox)
-		if i < len(stepContainers)-1 {
-			stepsRow.Add(layout.NewSpacer())
-		}
-	}
-
-	// Background line
-	lineColor := color.NRGBA{R: 200, G: 200, B: 200, A: 255}
-	backgroundLine := canvas.NewRectangle(lineColor)
-	backgroundLine.SetMinSize(fyne.NewSize(1, 3))
-
-	linePadding := canvas.NewRectangle(color.Transparent)
-	linePadding.SetMinSize(fyne.NewSize(1, 5))
-
-	leftPad := canvas.NewRectangle(color.Transparent)
-	leftPad.SetMinSize(fyne.NewSize(30, 3))
-	rightPad := canvas.NewRectangle(color.Transparent)
-	rightPad.SetMinSize(fyne.NewSize(30, 3))
-
-	lineRow := container.NewBorder(nil, nil, leftPad, rightPad, backgroundLine)
-	lineWithOffset := container.NewVBox(linePadding, lineRow)
-
-	timelineContainer := container.NewStack(lineWithOffset, stepsRow)
+func NewGUILogger(windowTitle, filename string) *GUILogger {
+	a := fyneapp.New()
+	a.Settings().SetTheme(theme.LightTheme())
+	w := a.NewWindow(windowTitle)
+	w.Resize(fyne.NewSize(500, 600))
 
 	okCh := make(chan struct{}, 1)
 	cancelCh := make(chan struct{}, 1)
-	manualOverrideCh := make(chan struct{}, 1)
+	proceedCh := make(chan struct{}, 1)
+	doneCh := make(chan struct{})
 
-	okBtn := widget.NewButton("OK", func() {
+	g := &GUILogger{
+		app:          a,
+		window:       w,
+		stepStatuses: make(map[string]*StepStatus),
+		stepOrder:    nil,
+		darkMode:     false,
+		okCh:         okCh,
+		cancelCh:     cancelCh,
+		proceedCh:    proceedCh,
+		doneCh:       doneCh,
+		filename:     filename,
+	}
+
+	// Create buttons
+	g.okBtn = widget.NewButton("OK", func() {
 		select {
 		case okCh <- struct{}{}:
 		default:
 		}
 	})
 
-	cancelBtn := widget.NewButton("Cancel", func() {
+	g.cancelBtn = widget.NewButton("Cancel", func() {
 		select {
 		case cancelCh <- struct{}{}:
 		default:
@@ -166,66 +137,31 @@ func NewGUILogger(title string) *GUILogger {
 		a.Quit()
 	})
 
-	quitBtn := widget.NewButton("Quit", func() {
+	g.quitBtn = widget.NewButton("Quit", func() {
 		a.Quit()
 	})
 
-	manualOverrideBtn := widget.NewButton("I finished the installation. Please proceed.", func() {
+	g.proceedBtn = widget.NewButton("I finished the installation. Please proceed.", func() {
 		select {
-		case manualOverrideCh <- struct{}{}:
+		case proceedCh <- struct{}{}:
 		default:
 		}
 	})
 
-	buttonContainer := container.NewCenter(container.NewHBox(okBtn, cancelBtn))
-	buttonContainer.Hide()
+	g.openSteamBtn = widget.NewButton("Open in Steam", func() {
+		exec.Command("xdg-open", "steam://open/library").Start()
+	})
 
-	// Main layout
-	content := container.NewVBox(
-		layout.NewSpacer(),
-		container.NewCenter(titleLabel),
-		widget.NewLabel(""),
-		container.NewCenter(timelineContainer),
-		widget.NewLabel(""),
-		container.NewCenter(subtitleLabel),
-		layout.NewSpacer(),
-		buttonContainer,
-		widget.NewLabel(""),
-	)
+	g.closeBtn = widget.NewButton("Close", func() {
+		a.Quit()
+	})
 
-	w.SetContent(content)
+	// Build the UI
+	g.buildUI()
 
-	// Open log file
-	logPath := filepath.Join(os.TempDir(), "deck-game-installer-v2-debug.log")
-	logFile, _ := os.Create(logPath)
-
-	doneCh := make(chan struct{})
-
-	g := &GUILogger{
-		app:               a,
-		window:            w,
-		titleLabel:        titleLabel,
-		subtitleLabel:     subtitleLabel,
-		stepCircles:       stepCircles,
-		stepLabels:        stepLabels,
-		steps:             defaultSteps,
-		currentStepIndex:  0,
-		buttonContainer:   buttonContainer,
-		okBtn:             okBtn,
-		cancelBtn:         cancelBtn,
-		quitBtn:           quitBtn,
-		manualOverrideBtn: manualOverrideBtn,
-		okCh:              okCh,
-		cancelCh:          cancelCh,
-		manualOverrideCh:  manualOverrideCh,
-		doneCh:            doneCh,
-		logFile:           logFile,
-	}
-
-	if logFile != nil {
-		fmt.Fprintf(logFile, "=== Deck Game Installer v2 Debug Log ===\n")
-		fmt.Fprintf(logFile, "Log file: %s\n\n", logPath)
-	}
+	// Log file
+	logPath := filepath.Join(os.TempDir(), "deck-game-installer-v2.log")
+	g.logFile, _ = os.Create(logPath)
 
 	w.SetCloseIntercept(func() {
 		select {
@@ -238,293 +174,654 @@ func NewGUILogger(title string) *GUILogger {
 	return g
 }
 
+func (g *GUILogger) buildUI() {
+	// Header: icon + title + spacer + theme toggle + progress counter
+	appIcon := canvas.NewImageFromResource(theme.ComputerIcon())
+	appIcon.SetMinSize(fyne.NewSize(40, 40))
+	appIcon.FillMode = canvas.ImageFillContain
+
+	g.titleLabel = widget.NewLabelWithStyle(fmt.Sprintf("Installing %s", g.filename), fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
+	g.statusLabel = widget.NewLabel("Initializing...")
+	g.statusLabel.TextStyle = fyne.TextStyle{}
+
+	// Theme toggle button (sun/moon icon)
+	g.themeBtn = widget.NewButtonWithIcon("", theme.ColorPaletteIcon(), func() {
+		g.toggleTheme()
+	})
+
+	titleBox := container.NewVBox(g.titleLabel, g.statusLabel)
+
+	header := container.NewBorder(nil, nil, container.NewHBox(appIcon, titleBox), g.themeBtn)
+
+	// Progress bar
+	g.progressBar = widget.NewProgressBar()
+	g.progressBar.Min = 0
+	g.progressBar.Max = 1
+
+	// Step list (will be populated by ConfigureSteps)
+	g.stepListBox = container.NewVBox()
+	g.stepListScroll = container.NewVScroll(g.stepListBox)
+	g.stepListScroll.SetMinSize(fyne.NewSize(380, 400))
+
+	// Bottom box for buttons and completion message
+	g.bottomBox = container.NewVBox()
+
+	// Main content
+	content := container.NewBorder(
+		container.NewVBox(header, widget.NewSeparator(), g.progressBar),
+		g.bottomBox,
+		nil, nil,
+		container.NewPadded(g.stepListScroll),
+	)
+
+	g.window.SetContent(container.NewPadded(content))
+}
+
+func (g *GUILogger) toggleTheme() {
+	g.darkMode = !g.darkMode
+	if g.darkMode {
+		g.app.Settings().SetTheme(theme.DarkTheme())
+	} else {
+		g.app.Settings().SetTheme(theme.LightTheme())
+	}
+}
+
 func (g *GUILogger) runOnUI(fn func()) {
-	if driver, ok := g.app.Driver().(interface{ RunOnMain(func()) }); ok {
-		driver.RunOnMain(fn)
+	if d, ok := g.app.Driver().(interface{ RunOnMain(func()) }); ok {
+		d.RunOnMain(fn)
 		return
 	}
 	fn()
 }
 
-// Run starts the GUI event loop. This blocks until the window is closed.
 func (g *GUILogger) Run() {
 	g.window.Show()
 	g.app.Run()
-	// Signal that GUI has closed
 	close(g.doneCh)
 }
 
-// WaitForClose blocks until the GUI window is closed.
 func (g *GUILogger) WaitForClose() {
 	<-g.doneCh
 }
 
-// Close shuts down the GUI.
 func (g *GUILogger) Close() {
-	g.closeOnce.Do(func() {
-		g.app.Quit()
-	})
+	g.closeOnce.Do(func() { g.app.Quit() })
 }
 
-// Log writes a message to the debug log file.
-func (g *GUILogger) Log(message string) {
+func (g *GUILogger) Log(msg string) {
 	if g.logFile != nil {
-		fmt.Fprintln(g.logFile, message)
+		fmt.Fprintln(g.logFile, msg)
 		g.logFile.Sync()
 	}
+
+	// Add log to current step
+	g.mu.Lock()
+	if g.currentStep != "" {
+		if status, ok := g.stepStatuses[g.currentStep]; ok {
+			status.Logs = append(status.Logs, msg)
+		}
+	}
+	g.mu.Unlock()
+
+	// Refresh the UI to show new log
+	g.runOnUI(func() {
+		g.refreshStepList()
+	})
 }
 
-// SetStep updates the UI to show the current step.
 func (g *GUILogger) SetStep(name string) {
+	// For backward compatibility, delegate to StepStarted
+	g.StepStarted(name)
+}
+
+func (g *GUILogger) StepStarted(name string) {
+	g.mu.Lock()
+	g.currentStep = name
+	if status, ok := g.stepStatuses[name]; ok {
+		status.Status = StepRunning
+		status.StartTime = time.Now()
+	}
+	g.mu.Unlock()
+
 	g.runOnUI(func() {
-		stepIndex := -1
-		for i, step := range g.steps {
-			if step == name {
-				stepIndex = i
-				break
-			}
-		}
-
-		if stepIndex == -1 {
-			g.subtitleLabel.SetText(name + "...")
-			return
-		}
-
-		completeColor := color.NRGBA{R: 76, G: 175, B: 80, A: 255}
-		inactiveColor := color.NRGBA{R: 200, G: 200, B: 200, A: 255}
-
-		g.currentStepIndex = stepIndex
-
-		for i := range g.stepCircles {
-			if i < stepIndex {
-				g.stepCircles[i].FillColor = inactiveColor
-				g.stepCircles[i].StrokeColor = inactiveColor
-				g.stepLabels[i].TextStyle.Bold = false
-			} else if i == stepIndex {
-				g.stepCircles[i].FillColor = completeColor
-				g.stepCircles[i].StrokeColor = completeColor
-				g.stepLabels[i].TextStyle.Bold = true
-			} else {
-				g.stepCircles[i].FillColor = color.White
-				g.stepCircles[i].StrokeColor = inactiveColor
-				g.stepLabels[i].TextStyle.Bold = false
-			}
-			g.stepCircles[i].Refresh()
-			g.stepLabels[i].Refresh()
-		}
-
-		g.subtitleLabel.SetText(name + "...")
+		g.updateProgress()
+		g.refreshStepList()
 	})
 }
 
-// ConfigureSteps sets up the list of steps to display.
-func (g *GUILogger) ConfigureSteps(stepNames []string) {
-	g.runOnUI(func() {
-		g.steps = stepNames
-
-		for i := range g.stepLabels {
-			if i < len(stepNames) {
-				g.stepLabels[i].SetText(stepNames[i])
-				g.stepLabels[i].Show()
-				g.stepCircles[i].Show()
-			} else {
-				g.stepLabels[i].Hide()
-				g.stepCircles[i].Hide()
-			}
+func (g *GUILogger) StepCompleted(name string, err error) {
+	g.mu.Lock()
+	if status, ok := g.stepStatuses[name]; ok {
+		status.EndTime = time.Now()
+		status.Duration = status.EndTime.Sub(status.StartTime)
+		if err != nil {
+			status.Status = StepFailed
+			status.Error = err
+		} else {
+			status.Status = StepCompleted
+			g.completedSteps++
 		}
-	})
-}
+	}
+	g.mu.Unlock()
 
-// Confirm shows a yes/no confirmation dialog.
-func (g *GUILogger) Confirm(title, message string) bool {
-	resp := make(chan bool, 1)
 	g.runOnUI(func() {
-		d := dialog.NewConfirm(title, message, func(ok bool) {
-			resp <- ok
-		}, g.window)
-		d.Show()
+		g.updateProgress()
+		g.refreshStepList()
 	})
-	return <-resp
 }
 
-// Select shows a selection dialog with multiple options.
-func (g *GUILogger) Select(title, prompt string, options []string) (string, bool) {
-	resultCh := make(chan string, 1)
-	cancelCh := make(chan struct{}, 1)
-	selected := ""
-
-	commonPrefix := findCommonPrefix(options)
-	displayPrefix := ""
-	if len(commonPrefix) > 20 {
-		displayPrefix = commonPrefix
-		if idx := strings.Index(displayPrefix, "/pfx/"); idx != -1 {
-			displayPrefix = displayPrefix[:idx+4]
+func (g *GUILogger) ConfigureSteps(names []string) {
+	// Deduplicate step names
+	seen := make(map[string]bool)
+	var unique []string
+	for _, n := range names {
+		if !seen[n] {
+			seen[n] = true
+			unique = append(unique, n)
 		}
 	}
 
-	displayPrompt := prompt
-	if displayPrefix != "" {
-		displayPrompt += "\nPrefix: " + displayPrefix
+	g.mu.Lock()
+	g.stepOrder = unique
+	g.totalSteps = len(unique)
+	g.stepStatuses = make(map[string]*StepStatus)
+	for _, name := range unique {
+		g.stepStatuses[name] = &StepStatus{
+			Name:   name,
+			Status: StepPending,
+		}
+	}
+	g.mu.Unlock()
+
+	g.runOnUI(func() {
+		g.updateProgress()
+		g.refreshStepList()
+	})
+}
+
+func (g *GUILogger) updateProgress() {
+	g.mu.Lock()
+	completed := g.completedSteps
+	total := g.totalSteps
+	current := g.currentStep
+	g.mu.Unlock()
+
+	// Count running as partial progress
+	progress := float64(completed) / float64(total)
+	g.progressBar.SetValue(progress)
+
+	if current != "" {
+		g.statusLabel.SetText(fmt.Sprintf("Installing... step %d of %d", completed+1, total))
+	}
+}
+
+func (g *GUILogger) refreshStepList() {
+	g.mu.Lock()
+	order := g.stepOrder
+	statuses := make(map[string]*StepStatus)
+	for k, v := range g.stepStatuses {
+		statuses[k] = v
+	}
+	g.mu.Unlock()
+
+	g.stepListBox.Objects = nil
+
+	for i, name := range order {
+		status := statuses[name]
+		isLast := i == len(order)-1
+		stepWidget := g.createStepWidget(status, isLast, i)
+		g.stepListBox.Add(stepWidget)
+	}
+
+	g.stepListBox.Refresh()
+
+	// Auto-scroll to show the current running step
+	g.stepListScroll.ScrollToBottom()
+}
+
+func (g *GUILogger) createStepWidget(status *StepStatus, isLast bool, index int) fyne.CanvasObject {
+	// Circle indicator
+	circleSize := float32(24)
+	circle := canvas.NewCircle(g.getStatusColor(status.Status))
+	circle.StrokeWidth = 0
+
+	// Status icon inside circle
+	var iconText string
+	switch status.Status {
+	case StepCompleted:
+		iconText = "✓"
+	case StepFailed:
+		iconText = "✗"
+	default:
+		iconText = ""
+	}
+
+	iconLabel := canvas.NewText(iconText, color.White)
+	iconLabel.TextSize = 14
+	iconLabel.TextStyle = fyne.TextStyle{Bold: true}
+	iconLabel.Alignment = fyne.TextAlignCenter
+
+	circleContainer := container.NewStack(
+		container.NewCenter(newSizedCircle(circle, circleSize)),
+		container.NewCenter(iconLabel),
+	)
+
+	// Connector line (vertical, below the circle)
+	var lineContainer fyne.CanvasObject
+	if !isLast {
+		line := canvas.NewRectangle(colLine)
+		lineHeight := float32(20)
+		if status.Expanded && len(status.Logs) > 0 {
+			// Extend line when logs are expanded
+			lineHeight = float32(100)
+		}
+		line.SetMinSize(fyne.NewSize(2, lineHeight))
+		lineContainer = container.NewVBox(
+			container.NewCenter(line),
+		)
+	} else {
+		lineContainer = layout.NewSpacer()
+	}
+
+	// Left column: circle + line
+	leftColumn := container.NewVBox(
+		circleContainer,
+		lineContainer,
+	)
+
+	// Step name
+	nameLabel := widget.NewLabel(status.Name)
+	nameLabel.TextStyle = fyne.TextStyle{Bold: status.Status == StepRunning}
+
+	// Duration label
+	durationLabel := widget.NewLabel("")
+	if status.Status == StepCompleted || status.Status == StepFailed {
+		durationLabel.SetText(fmt.Sprintf("%.1fs", status.Duration.Seconds()))
+	}
+	durationLabel.Alignment = fyne.TextAlignTrailing
+
+	// Chevron for expand/collapse
+	chevronText := "▶"
+	if status.Expanded {
+		chevronText = "▼"
+	}
+	chevron := widget.NewLabel(chevronText)
+
+	// Main row: name + spacer + duration + chevron
+	mainRow := container.NewBorder(
+		nil, nil,
+		nameLabel,
+		container.NewHBox(durationLabel, chevron),
+	)
+
+	// Build content area (logs if expanded)
+	var contentArea fyne.CanvasObject
+	if status.Expanded && len(status.Logs) > 0 {
+		logsText := strings.Join(status.Logs, "\n")
+		logsLabel := widget.NewLabel(logsText)
+		logsLabel.TextStyle = fyne.TextStyle{Monospace: true}
+		logsLabel.Wrapping = fyne.TextWrapBreak
+
+		logsScroll := container.NewVScroll(logsLabel)
+		logsScroll.SetMinSize(fyne.NewSize(300, 80)) // ~5 lines
+
+		// Scroll to bottom
+		logsScroll.ScrollToBottom()
+
+		contentArea = container.NewVBox(
+			mainRow,
+			container.NewPadded(logsScroll),
+		)
+	} else {
+		contentArea = mainRow
+	}
+
+	// Right column: content
+	rightColumn := container.NewBorder(nil, nil, nil, nil, contentArea)
+
+	// Full step row
+	stepRow := container.NewBorder(
+		nil, nil,
+		leftColumn,
+		nil,
+		rightColumn,
+	)
+
+	// Make tappable
+	tappable := newTappableContainer(stepRow, func() {
+		g.mu.Lock()
+		status.Expanded = !status.Expanded
+		g.mu.Unlock()
+		g.runOnUI(func() {
+			g.refreshStepList()
+		})
+	})
+
+	return tappable
+}
+
+func (g *GUILogger) getStatusColor(status StepStatusType) color.Color {
+	switch status {
+	case StepPending:
+		return colPending
+	case StepRunning:
+		return colRunning
+	case StepCompleted:
+		return colCompleted
+	case StepFailed:
+		return colFailed
+	default:
+		return colPending
+	}
+}
+
+func (g *GUILogger) Confirm(title, msg string) bool {
+	ch := make(chan bool, 1)
+	g.runOnUI(func() {
+		dialog.NewConfirm(title, msg, func(ok bool) { ch <- ok }, g.window).Show()
+	})
+	return <-ch
+}
+
+func (g *GUILogger) Select(title, prompt string, opts []string) (string, bool) {
+	resCh := make(chan string, 1)
+	canCh := make(chan struct{}, 1)
+	sel := ""
+
+	pfx := findCommonPrefix(opts)
+	dispPfx := ""
+	if len(pfx) > 20 {
+		dispPfx = pfx
+		if i := strings.Index(dispPfx, "/pfx/"); i != -1 {
+			dispPfx = dispPfx[:i+4]
+		}
+	}
+
+	p := prompt
+	if dispPfx != "" {
+		p += "\n\nPrefix: " + dispPfx
 	}
 
 	list := widget.NewList(
-		func() int { return len(options) },
+		func() int { return len(opts) },
 		func() fyne.CanvasObject { return widget.NewLabel("") },
 		func(i widget.ListItemID, o fyne.CanvasObject) {
-			text := options[i]
-			if displayPrefix != "" {
-				text = strings.TrimPrefix(text, displayPrefix)
-				text = strings.TrimPrefix(text, "/")
+			t := opts[i]
+			if dispPfx != "" {
+				t = strings.TrimPrefix(t, dispPfx)
+				t = strings.TrimPrefix(t, "/")
 			}
-			text = truncateMiddle(text, 80)
-			o.(*widget.Label).SetText(text)
+			o.(*widget.Label).SetText(truncMid(t, 60))
 		},
 	)
-	list.OnSelected = func(id widget.ListItemID) {
-		if id >= 0 && id < len(options) {
-			selected = options[id]
+	list.OnSelected = func(i widget.ListItemID) {
+		if i >= 0 && i < len(opts) {
+			sel = opts[i]
 		}
 	}
-
-	if len(options) == 1 {
-		selected = options[0]
+	if len(opts) == 1 {
+		sel = opts[0]
 		list.Select(0)
 	}
 
-	content := container.NewBorder(
-		widget.NewLabel(displayPrompt),
-		nil, nil, nil,
-		container.NewVScroll(list),
-	)
-
 	g.runOnUI(func() {
-		d := dialog.NewCustomConfirm(title, "OK", "Cancel", content, func(ok bool) {
-			if !ok || selected == "" {
-				cancelCh <- struct{}{}
-				return
-			}
-			resultCh <- selected
-		}, g.window)
-		d.Resize(fyne.NewSize(520, 420))
+		d := dialog.NewCustomConfirm(title, "OK", "Cancel",
+			container.NewBorder(widget.NewLabel(p), nil, nil, nil, container.NewVScroll(list)),
+			func(ok bool) {
+				if !ok || sel == "" {
+					canCh <- struct{}{}
+				} else {
+					resCh <- sel
+				}
+			}, g.window)
+		d.Resize(fyne.NewSize(480, 340))
 		d.Show()
 	})
 
 	select {
-	case value := <-resultCh:
-		return value, true
-	case <-cancelCh:
+	case v := <-resCh:
+		return v, true
+	case <-canCh:
 		return "", false
 	}
 }
 
-// Error shows an error dialog.
-func (g *GUILogger) Error(title, message string) {
-	g.runOnUI(func() {
-		dialog.ShowError(fmt.Errorf("%s", message), g.window)
-	})
+func (g *GUILogger) Error(title, msg string) {
+	g.runOnUI(func() { dialog.ShowError(fmt.Errorf("%s", msg), g.window) })
 }
 
-// Info shows an informational dialog.
-func (g *GUILogger) Info(title, message string) {
-	done := make(chan struct{})
+func (g *GUILogger) Info(title, msg string) {
+	ch := make(chan struct{})
 	g.runOnUI(func() {
-		d := dialog.NewInformation(title, message, g.window)
-		d.SetOnClosed(func() {
-			close(done)
-		})
+		d := dialog.NewInformation(title, msg, g.window)
+		d.SetOnClosed(func() { close(ch) })
 		d.Show()
 	})
-	<-done
+	<-ch
 }
 
-// RollbackPrompt shows a dialog asking the user if they want to roll back.
-func (g *GUILogger) RollbackPrompt(errorMsg string, completedOps []string) bool {
-	message := fmt.Sprintf("Error: %s\n\nThe following changes were made:\n", errorMsg)
-	for _, op := range completedOps {
-		message += "  • " + op + "\n"
+func (g *GUILogger) RollbackPrompt(err string, ops []string) bool {
+	m := fmt.Sprintf("Error: %s\n\nChanges made:\n", err)
+	for _, o := range ops {
+		m += "  • " + o + "\n"
 	}
-	message += "\nWould you like to undo these changes?"
-
-	return g.Confirm("Installation Failed", message)
+	m += "\nUndo these changes?"
+	return g.Confirm("Installation Failed", m)
 }
 
-// Wait blocks until the user clicks OK.
 func (g *GUILogger) Wait() {
 	g.WaitWithMessage("Click OK to continue...")
 }
 
-// WaitWithMessage shows a message and OK/Cancel buttons.
-func (g *GUILogger) WaitWithMessage(message string) bool {
+func (g *GUILogger) WaitWithMessage(msg string) bool {
 	g.runOnUI(func() {
-		g.subtitleLabel.SetText(message)
-		g.buttonContainer.Objects = []fyne.CanvasObject{container.NewHBox(g.okBtn, g.cancelBtn)}
-		g.buttonContainer.Show()
-		g.buttonContainer.Refresh()
+		g.statusLabel.SetText(msg)
+		g.bottomBox.Objects = []fyne.CanvasObject{
+			container.NewCenter(container.NewHBox(g.okBtn, g.cancelBtn)),
+		}
+		g.bottomBox.Refresh()
 	})
 
-	var res bool
+	var r bool
 	select {
 	case <-g.okCh:
-		res = true
+		r = true
 	case <-g.cancelCh:
-		res = false
+		r = false
 	}
 
 	g.runOnUI(func() {
-		g.buttonContainer.Hide()
-		g.okBtn.SetText("OK")
-		g.cancelBtn.SetText("Cancel")
+		g.bottomBox.Objects = nil
+		g.bottomBox.Refresh()
 	})
-	return res
+	return r
 }
 
-// WaitWithManualOverride shows a single button for manual override while waiting
-// for the installer to complete. Returns a channel that receives when clicked.
 func (g *GUILogger) WaitWithManualOverride() <-chan struct{} {
 	g.runOnUI(func() {
-		g.subtitleLabel.SetText("Waiting for installer to finish...")
-		g.buttonContainer.Objects = []fyne.CanvasObject{container.NewHBox(g.manualOverrideBtn)}
-		g.buttonContainer.Show()
-		g.buttonContainer.Refresh()
+		g.statusLabel.SetText("Waiting for installer to finish...")
+		g.bottomBox.Objects = []fyne.CanvasObject{
+			container.NewCenter(container.NewHBox(g.proceedBtn)),
+		}
+		g.bottomBox.Refresh()
 	})
-	return g.manualOverrideCh
+	return g.proceedCh
 }
 
-// ShowComplete shows the completion screen with a quit button.
 func (g *GUILogger) ShowComplete() {
 	g.runOnUI(func() {
-		g.subtitleLabel.SetText("Installation completed successfully!")
-		g.buttonContainer.Objects = []fyne.CanvasObject{container.NewHBox(g.quitBtn)}
-		g.buttonContainer.Show()
-		g.buttonContainer.Refresh()
+		g.mu.Lock()
+		g.completedSteps = g.totalSteps
+		g.mu.Unlock()
+
+		g.progressBar.SetValue(1)
+		g.statusLabel.SetText("Installation complete")
+
+		// Success banner
+		successIcon := canvas.NewText("✓", colCompleted)
+		successIcon.TextSize = 24
+		successIcon.TextStyle = fyne.TextStyle{Bold: true}
+
+		successTitle := widget.NewLabelWithStyle("Your Game is ready to play", fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
+		successMsg := widget.NewLabel("Your game has been added to Steam and can\nbe found in your library under Non-Steam games.")
+		successMsg.Wrapping = fyne.TextWrapWord
+
+		successContent := container.NewVBox(
+			container.NewHBox(successIcon, successTitle),
+			successMsg,
+			widget.NewSeparator(),
+			container.NewHBox(g.openSteamBtn, g.closeBtn),
+		)
+
+		// Create a bordered success box
+		successBox := container.NewPadded(successContent)
+
+		g.bottomBox.Objects = []fyne.CanvasObject{
+			widget.NewSeparator(),
+			successBox,
+		}
+		g.bottomBox.Refresh()
 	})
 }
 
-// Helper functions
+func (g *GUILogger) ShowFailure(errMsg string) {
+	g.runOnUI(func() {
+		g.statusLabel.SetText("Installation failed")
 
-func findCommonPrefix(strs []string) string {
-	if len(strs) == 0 {
-		return ""
-	}
-	prefix := strs[0]
-	for _, s := range strs {
-		for !strings.HasPrefix(s, prefix) {
-			prefix = prefix[:len(prefix)-1]
+		// Failure banner
+		failIcon := canvas.NewText("✗", colFailed)
+		failIcon.TextSize = 24
+		failIcon.TextStyle = fyne.TextStyle{Bold: true}
+
+		failTitle := widget.NewLabelWithStyle("Installation Failed", fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
+		failMsg := widget.NewLabel(errMsg)
+		failMsg.Wrapping = fyne.TextWrapWord
+
+		failContent := container.NewVBox(
+			container.NewHBox(failIcon, failTitle),
+			failMsg,
+			widget.NewSeparator(),
+			container.NewCenter(g.closeBtn),
+		)
+
+		failBox := container.NewPadded(failContent)
+
+		g.bottomBox.Objects = []fyne.CanvasObject{
+			widget.NewSeparator(),
+			failBox,
 		}
-	}
-	if idx := strings.LastIndex(prefix, "/"); idx != -1 {
-		prefix = prefix[:idx+1]
-	}
-	return prefix
+		g.bottomBox.Refresh()
+	})
 }
 
-func truncateMiddle(s string, maxLen int) string {
-	if len(s) <= maxLen {
+// Helper: sized circle wrapper
+type sizedCircle struct {
+	widget.BaseWidget
+	circle *canvas.Circle
+	size   float32
+}
+
+func newSizedCircle(circle *canvas.Circle, size float32) *sizedCircle {
+	s := &sizedCircle{circle: circle, size: size}
+	s.ExtendBaseWidget(s)
+	return s
+}
+
+func (s *sizedCircle) CreateRenderer() fyne.WidgetRenderer {
+	return &sizedCircleRenderer{circle: s.circle, size: s.size}
+}
+
+type sizedCircleRenderer struct {
+	circle *canvas.Circle
+	size   float32
+}
+
+func (r *sizedCircleRenderer) Layout(size fyne.Size) {
+	r.circle.Resize(fyne.NewSize(r.size, r.size))
+}
+
+func (r *sizedCircleRenderer) MinSize() fyne.Size {
+	return fyne.NewSize(r.size, r.size)
+}
+
+func (r *sizedCircleRenderer) Refresh() {
+	r.circle.Refresh()
+}
+
+func (r *sizedCircleRenderer) Objects() []fyne.CanvasObject {
+	return []fyne.CanvasObject{r.circle}
+}
+
+func (r *sizedCircleRenderer) Destroy() {}
+
+// Helper: tappable container
+type tappableContainer struct {
+	widget.BaseWidget
+	content  fyne.CanvasObject
+	onTapped func()
+}
+
+func newTappableContainer(content fyne.CanvasObject, onTapped func()) *tappableContainer {
+	t := &tappableContainer{content: content, onTapped: onTapped}
+	t.ExtendBaseWidget(t)
+	return t
+}
+
+func (t *tappableContainer) CreateRenderer() fyne.WidgetRenderer {
+	return &tappableContainerRenderer{content: t.content}
+}
+
+func (t *tappableContainer) Tapped(*fyne.PointEvent) {
+	if t.onTapped != nil {
+		t.onTapped()
+	}
+}
+
+func (t *tappableContainer) TappedSecondary(*fyne.PointEvent) {}
+
+type tappableContainerRenderer struct {
+	content fyne.CanvasObject
+}
+
+func (r *tappableContainerRenderer) Layout(size fyne.Size) {
+	r.content.Resize(size)
+}
+
+func (r *tappableContainerRenderer) MinSize() fyne.Size {
+	return r.content.MinSize()
+}
+
+func (r *tappableContainerRenderer) Refresh() {
+	r.content.Refresh()
+}
+
+func (r *tappableContainerRenderer) Objects() []fyne.CanvasObject {
+	return []fyne.CanvasObject{r.content}
+}
+
+func (r *tappableContainerRenderer) Destroy() {}
+
+// Utility functions
+func findCommonPrefix(s []string) string {
+	if len(s) == 0 {
+		return ""
+	}
+	p := s[0]
+	for _, x := range s {
+		for !strings.HasPrefix(x, p) {
+			p = p[:len(p)-1]
+		}
+	}
+	if i := strings.LastIndex(p, "/"); i != -1 {
+		p = p[:i+1]
+	}
+	return p
+}
+
+func truncMid(s string, m int) string {
+	if len(s) <= m {
 		return s
 	}
-	if maxLen < 3 {
-		return s[:maxLen]
-	}
-	partLen := (maxLen - 3) / 2
-	return s[:partLen] + "..." + s[len(s)-partLen:]
+	n := (m - 3) / 2
+	return s[:n] + "..." + s[len(s)-n:]
 }

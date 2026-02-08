@@ -55,18 +55,20 @@ func (r *Runner) Run(ctx context.Context) error {
 		}
 
 		// Update UI to show current step
-		r.state.UI.SetStep(step.Name())
+		r.state.UI.StepStarted(step.Name())
 		r.state.UI.Log(fmt.Sprintf("Starting: %s", step.Name()))
 
 		// Execute the step
 		if err := step.Execute(ctx, r.state); err != nil {
 			r.state.UI.Log(fmt.Sprintf("Failed: %s - %v", step.Name(), err))
+			r.state.UI.StepCompleted(step.Name(), err)
 			r.handleFailure(ctx, err)
 			return err
 		}
 
 		// Track completed steps for potential rollback
 		r.completedSteps = append(r.completedSteps, step)
+		r.state.UI.StepCompleted(step.Name(), nil)
 		r.state.UI.Log(fmt.Sprintf("Completed: %s", step.Name()))
 	}
 

@@ -2,6 +2,7 @@
 package proton
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -154,7 +155,14 @@ func (m *Manager) PrefixPath(appID int32) string {
 // Returns executables sorted by modification time (newest first).
 func (m *Manager) ScanPrefixForExecutables(appID int32) []string {
 	prefix := m.PrefixPath(appID)
+	logPath := "/tmp/deck-game-installer-v2.log"
+	logFile, _ := os.OpenFile(logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	defer logFile.Close()
+
+	fmt.Fprintf(logFile, "\n[ScanPrefixForExecutables] Scanning prefix: %s\n", prefix)
+
 	if _, err := os.Stat(prefix); err != nil {
+		fmt.Fprintf(logFile, "Prefix does not exist or is not accessible.\n")
 		return nil
 	}
 
@@ -193,7 +201,9 @@ func (m *Manager) ScanPrefixForExecutables(appID int32) []string {
 		regexp.MustCompile(`.*crashhandler.*\.exe`),
 	}
 
-	var executables []string
+	var allExecutables []string
+	var excludedExecutables []string
+	var includedExecutables []string
 
 	_ = filepath.WalkDir(prefix, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
@@ -218,26 +228,43 @@ func (m *Manager) ScanPrefixForExecutables(appID int32) []string {
 			return nil
 		}
 
+		allExecutables = append(allExecutables, path)
+
 		// Filter out known non-game executables
 		for _, re := range patterns {
 			if re.MatchString(name) {
+				excludedExecutables = append(excludedExecutables, path)
 				return nil
 			}
 		}
 
-		executables = append(executables, path)
+		includedExecutables = append(includedExecutables, path)
 		return nil
 	})
 
+	fmt.Fprintf(logFile, "All .exe files found:\n")
+	for _, exe := range allExecutables {
+		fmt.Fprintf(logFile, "  %s\n", exe)
+	}
+	fmt.Fprintf(logFile, "\nIncluded executables (offered to user):\n")
+	for _, exe := range includedExecutables {
+		fmt.Fprintf(logFile, "  %s\n", exe)
+	}
+	fmt.Fprintf(logFile, "\nExcluded executables (filtered out):\n")
+	for _, exe := range excludedExecutables {
+		fmt.Fprintf(logFile, "  %s\n", exe)
+	}
+	fmt.Fprintf(logFile, "Done scanning for executables.\n")
+
 	// Sort by modification time (newest first)
-	sort.Slice(executables, func(i, j int) bool {
-		iInfo, _ := os.Stat(executables[i])
-		jInfo, _ := os.Stat(executables[j])
+	sort.Slice(includedExecutables, func(i, j int) bool {
+		iInfo, _ := os.Stat(includedExecutables[i])
+		jInfo, _ := os.Stat(includedExecutables[j])
 		if iInfo == nil || jInfo == nil {
-			return executables[i] > executables[j]
+			return includedExecutables[i] > includedExecutables[j]
 		}
 		return iInfo.ModTime().After(jInfo.ModTime())
 	})
 
-	return executables
+	return includedExecutables
 }

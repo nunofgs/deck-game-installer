@@ -6,12 +6,14 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // ConsoleLogger implements Logger for command-line usage.
 type ConsoleLogger struct {
 	currentStep string
 	steps       []string
+	stepStart   time.Time
 }
 
 // NewConsoleLogger creates a new console-based logger.
@@ -28,6 +30,23 @@ func (c *ConsoleLogger) Log(message string) {
 func (c *ConsoleLogger) SetStep(name string) {
 	c.currentStep = name
 	fmt.Printf("\n=== %s ===\n", name)
+}
+
+// StepStarted marks a step as started.
+func (c *ConsoleLogger) StepStarted(name string) {
+	c.currentStep = name
+	c.stepStart = time.Now()
+	fmt.Printf("\n=== %s ===\n", name)
+}
+
+// StepCompleted marks a step as completed or failed.
+func (c *ConsoleLogger) StepCompleted(name string, err error) {
+	duration := time.Since(c.stepStart)
+	if err != nil {
+		fmt.Printf("✗ %s failed (%.1fs): %v\n", name, duration.Seconds(), err)
+	} else {
+		fmt.Printf("✓ %s completed (%.1fs)\n", name, duration.Seconds())
+	}
 }
 
 // ConfigureSteps stores the list of steps for display.
