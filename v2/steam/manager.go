@@ -3,6 +3,7 @@ package steam
 import (
 	"context"
 	"errors"
+	"fmt"
 	"hash/crc32"
 	"os"
 	"os/exec"
@@ -573,8 +574,15 @@ func (m *Manager) waitForSteamShutdown(ctx context.Context) error {
 }
 
 // LaunchApp launches a Steam app by its app ID using the steam:// URL protocol.
-func (m *Manager) LaunchApp(appID int32) error {
+// LaunchApp launches a Steam app by its app ID using the steam:// URL protocol.
+// Accepts a logger function for UI logging.
+func (m *Manager) LaunchApp(appID int32, logFn func(string)) error {
 	urlAppID := GetURLAppID(appID)
 	url := "steam://rungameid/" + urlAppID
+	cmd := fmt.Sprintf("steam %s", url)
+	fmt.Printf("[steamer] Launching Steam command: %s\n", cmd)
+	if logFn != nil {
+		 logFn(fmt.Sprintf("Launching Steam command: %s", cmd))
+	}
 	return exec.Command("steam", url).Start()
 }

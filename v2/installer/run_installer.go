@@ -35,9 +35,9 @@ func (s *RunInstaller) Execute(ctx context.Context, state *State) error {
 	case <-time.After(2 * time.Second):
 	}
 
-	if err := state.Steam.LaunchApp(state.AppID); err != nil {
-		return fmt.Errorf("failed to launch installer: %w", err)
-	}
+	       if err := state.Steam.LaunchApp(state.AppID, state.UI.Log); err != nil {
+		       return fmt.Errorf("failed to launch installer: %w", err)
+	       }
 
 	state.UI.Log("Installer launched")
 	return nil
