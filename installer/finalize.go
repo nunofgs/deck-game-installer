@@ -24,15 +24,5 @@ func (s *FinalRestart) Execute(ctx context.Context, state *State) error {
 		return fmt.Errorf("failed to start Steam: %w", err)
 	}
 
-	state.UI.Info("Installation Complete", s.completionMessage(state))
 	return nil
-}
-
-func (s *FinalRestart) completionMessage(state *State) string {
-	if state.GameExePath != "" {
-		return "Your game has been added to Steam and is ready to play.\n" +
-			"You can find it in your Steam library under Non-Steam games."
-	}
-	return "The installer shortcut has been created.\n" +
-		"You may need to configure the game executable manually in Steam."
 }

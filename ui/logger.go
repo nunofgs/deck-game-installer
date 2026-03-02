@@ -32,9 +32,6 @@ type Logger interface {
 	// Error shows an error dialog to the user.
 	Error(title, message string)
 
-	// Info shows an informational dialog to the user.
-	Info(title, message string)
-
 	// Wait blocks until the user acknowledges (clicks OK).
 	Wait()
 

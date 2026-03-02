@@ -588,16 +588,6 @@ func (g *GUILogger) Error(title, msg string) {
 	g.runOnUI(func() { dialog.ShowError(fmt.Errorf("%s", msg), g.window) })
 }
 
-func (g *GUILogger) Info(title, msg string) {
-	ch := make(chan struct{})
-	g.runOnUI(func() {
-		d := dialog.NewInformation(title, msg, g.window)
-		d.SetOnClosed(func() { close(ch) })
-		d.Show()
-	})
-	<-ch
-}
-
 func (g *GUILogger) Wait() {
 	g.WaitWithMessage("Click OK to continue...")
 }
