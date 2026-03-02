@@ -22,7 +22,7 @@ func NewWaitForExit() *WaitForExit {
 }
 
 func (s *WaitForExit) Name() string {
-	return "Run Installer"
+	return "Wait for Installer"
 }
 
 

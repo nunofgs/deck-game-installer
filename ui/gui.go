@@ -313,21 +313,11 @@ func (g *GUILogger) StepCompleted(name string, err error) {
 }
 
 func (g *GUILogger) ConfigureSteps(names []string) {
-	// Deduplicate step names
-	seen := make(map[string]bool)
-	var unique []string
-	for _, n := range names {
-		if !seen[n] {
-			seen[n] = true
-			unique = append(unique, n)
-		}
-	}
-
 	g.mu.Lock()
-	g.stepOrder = unique
-	g.totalSteps = len(unique)
+	g.stepOrder = names
+	g.totalSteps = len(names)
 	g.stepStatuses = make(map[string]*StepStatus)
-	for _, name := range unique {
+	for _, name := range names {
 		g.stepStatuses[name] = &StepStatus{
 			Name:   name,
 			Status: StepPending,
