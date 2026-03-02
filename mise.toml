@@ -27,6 +27,6 @@ chmod +x ~/.local/share/kio/servicemenus/install-with-steam.desktop
 description = "Install the application and service menu"
 depends = ["app", "servicemenu"]
 
-[tasks.vdfprint]
-description = "Build and install the vdfprint VDF pretty-printer"
-run = "GOBIN=$HOME/.local/bin go install ./cmd/vdfprint"
+[tasks.vdf-print]
+description = "Build and install the vdf-print VDF pretty-printer"
+run = "GOBIN=$HOME/.local/bin go install ./cmd/vdf-print"

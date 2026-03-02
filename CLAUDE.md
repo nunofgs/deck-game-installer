@@ -4,21 +4,25 @@
 
 ## Development Commands
 
-This project uses `mise` for managing tool versions. When running commands, always use:
+This project uses `mise` for managing tool versions and tasks.
+
+### Build & install (recommended)
 
 ```bash
-/home/linuxbrew/.linuxbrew/bin/mise exec -- <command>
+/home/linuxbrew/.linuxbrew/bin/mise run app
 ```
 
-### Examples
+### Manual build (requires Fyne's C dependencies via Homebrew)
 
 ```bash
-# Build the project
+PKG_CONFIG_PATH=/home/linuxbrew/.linuxbrew/lib/pkgconfig \
+CGO_CFLAGS=-I/home/linuxbrew/.linuxbrew/include \
+CGO_LDFLAGS=-L/home/linuxbrew/.linuxbrew/lib \
 /home/linuxbrew/.linuxbrew/bin/mise exec -- go build ./...
+```
 
-# Run tests
+### Run tests
+
+```bash
 /home/linuxbrew/.linuxbrew/bin/mise exec -- go test ./...
-
-# Build specific package
-/home/linuxbrew/.linuxbrew/bin/mise exec -- go build ./cmd/deck-game-installer
 ```

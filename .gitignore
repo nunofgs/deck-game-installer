@@ -1,20 +1,5 @@
-# Python
-__pycache__/
-*.py[cod]
-*.pyo
-*.pyd
-
-# Virtual environments
-.venv/
-venv/
-
-# Build artifacts
-build/
-dist/
-*.egg-info/
-
-# Test/cache
-.pytest_cache/
+# Editor
+.vscode/
 
 # Logs and temp files
 *.log
@@ -22,4 +7,4 @@ dist/
 
 # Go binaries
 deck-game-installer
-vdfprint
+vdf-print
