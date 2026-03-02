@@ -44,7 +44,6 @@ func (s *MountISO) Execute(ctx context.Context, state *State) error {
 
 	state.MountPoint = mountPoint
 
-	// Derive game name from ISO path and mount point (same logic as v1)
 	state.GameName = gameNameFromPath(state.InputPath, mountPoint)
 	state.UI.Log("Game name: " + state.GameName)
 

@@ -43,17 +43,15 @@ func (r *Runner) Run(ctx context.Context) error {
 		}
 
 		r.state.UI.StepStarted(step.Name())
-		r.state.UI.Log(fmt.Sprintf("Starting: %s", step.Name()))
 
 		if err := step.Execute(ctx, r.state); err != nil {
-			r.state.UI.Log(fmt.Sprintf("Failed: %s - %v", step.Name(), err))
+			r.state.UI.Log(fmt.Sprintf("Error: %v", err))
 			r.state.UI.StepCompleted(step.Name(), err)
 			r.cleanup()
 			return err
 		}
 
 		r.state.UI.StepCompleted(step.Name(), nil)
-		r.state.UI.Log(fmt.Sprintf("Completed: %s", step.Name()))
 	}
 
 	return nil
