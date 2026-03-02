@@ -2,6 +2,16 @@
 
 A tool for installing Windows games on Steam Deck and Linux systems. Automates the entire workflow of installing games from ISO files or standalone EXE installers using Steam's Proton compatibility layer.
 
+## Installation
+
+Run this in a terminal on your Steam Deck (or any Linux system):
+
+```bash
+curl -fsSL https://github.com/nunofgs/deck-game-installer/releases/latest/download/install.sh | sh
+```
+
+This installs the binary to `~/.local/bin/` and sets up the Dolphin right-click menu entry.
+
 ## Usage
 
 You can install games in two ways:
