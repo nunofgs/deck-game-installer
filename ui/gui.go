@@ -344,14 +344,22 @@ func (g *GUILogger) updateProgress() {
 	completed := g.completedSteps
 	total := g.totalSteps
 	current := g.currentStep
+	order := g.stepOrder
 	g.mu.Unlock()
 
-	// Count running as partial progress
 	progress := float64(completed) / float64(total)
 	g.progressBar.SetValue(progress)
 
 	if current != "" {
-		g.statusLabel.SetText(fmt.Sprintf("Installing... step %d of %d", completed+1, total))
+		// Find the 1-based index of the current running step.
+		stepNum := completed + 1
+		for i, name := range order {
+			if name == current {
+				stepNum = i + 1
+				break
+			}
+		}
+		g.statusLabel.SetText(fmt.Sprintf("Installing... step %d of %d", stepNum, total))
 	}
 }
 
