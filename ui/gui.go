@@ -73,7 +73,6 @@ type GUILogger struct {
 	themeBtn       *widget.Button
 
 	// Buttons
-	okBtn        *widget.Button
 	cancelBtn    *widget.Button
 	quitBtn      *widget.Button
 	proceedBtn   *widget.Button
@@ -81,7 +80,6 @@ type GUILogger struct {
 	closeBtn     *widget.Button
 
 	// Channels
-	okCh      chan struct{}
 	cancelCh  chan struct{}
 	proceedCh chan struct{}
 	doneCh    chan struct{}
@@ -101,7 +99,6 @@ func NewGUILogger(windowTitle, filename string) *GUILogger {
 	w := a.NewWindow(windowTitle)
 	w.Resize(fyne.NewSize(500, 600))
 
-	okCh := make(chan struct{}, 1)
 	cancelCh := make(chan struct{}, 1)
 	proceedCh := make(chan struct{}, 1)
 	doneCh := make(chan struct{})
@@ -112,7 +109,6 @@ func NewGUILogger(windowTitle, filename string) *GUILogger {
 		stepStatuses: make(map[string]*StepStatus),
 		stepOrder:    nil,
 		darkMode:     false,
-		okCh:         okCh,
 		cancelCh:     cancelCh,
 		proceedCh:    proceedCh,
 		doneCh:       doneCh,
@@ -120,13 +116,6 @@ func NewGUILogger(windowTitle, filename string) *GUILogger {
 	}
 
 	// Create buttons
-	g.okBtn = widget.NewButton("OK", func() {
-		select {
-		case okCh <- struct{}{}:
-		default:
-		}
-	})
-
 	g.cancelBtn = widget.NewButton("Cancel", func() {
 		select {
 		case cancelCh <- struct{}{}:
@@ -269,11 +258,6 @@ func (g *GUILogger) Log(msg string) {
 	g.runOnUI(func() {
 		g.refreshStepList()
 	})
-}
-
-func (g *GUILogger) SetStep(name string) {
-	// For backward compatibility, delegate to StepStarted
-	g.StepStarted(name)
 }
 
 func (g *GUILogger) StepStarted(name string) {
@@ -586,38 +570,6 @@ func (g *GUILogger) Select(title, prompt string, opts []string) (string, bool) {
 	case <-canCh:
 		return "", false
 	}
-}
-
-func (g *GUILogger) Error(title, msg string) {
-	g.runOnUI(func() { dialog.ShowError(fmt.Errorf("%s", msg), g.window) })
-}
-
-func (g *GUILogger) Wait() {
-	g.WaitWithMessage("Click OK to continue...")
-}
-
-func (g *GUILogger) WaitWithMessage(msg string) bool {
-	g.runOnUI(func() {
-		g.statusLabel.SetText(msg)
-		g.bottomBox.Objects = []fyne.CanvasObject{
-			container.NewCenter(container.NewHBox(g.okBtn, g.cancelBtn)),
-		}
-		g.bottomBox.Refresh()
-	})
-
-	var r bool
-	select {
-	case <-g.okCh:
-		r = true
-	case <-g.cancelCh:
-		r = false
-	}
-
-	g.runOnUI(func() {
-		g.bottomBox.Objects = nil
-		g.bottomBox.Refresh()
-	})
-	return r
 }
 
 func (g *GUILogger) WaitWithManualOverride() <-chan struct{} {
