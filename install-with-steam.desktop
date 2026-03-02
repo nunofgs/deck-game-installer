@@ -7,4 +7,4 @@ Actions=InstallWithSteam
 [Desktop Action InstallWithSteam]
 Name=Install with Steam
 Icon=steam
-Exec=sh -c '"$HOME/.local/bin/deck-game-installer" install "$1"' _ %f
+Exec=sh -c '"$HOME/.local/bin/deck-game-installer" "$1"' _ %f
