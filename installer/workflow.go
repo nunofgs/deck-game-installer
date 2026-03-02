@@ -16,13 +16,7 @@ func NewRunner(state *State) *Runner {
 	return &Runner{state: state}
 }
 
-// AddStep adds a step to the workflow pipeline.
-func (r *Runner) AddStep(step Step) *Runner {
-	r.steps = append(r.steps, step)
-	return r
-}
-
-// AddSteps adds multiple steps to the workflow pipeline.
+// AddSteps adds one or more steps to the workflow pipeline.
 func (r *Runner) AddSteps(stepList ...Step) *Runner {
 	r.steps = append(r.steps, stepList...)
 	return r
