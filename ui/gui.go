@@ -88,8 +88,6 @@ type GUILogger struct {
 	// Theme
 	darkMode bool
 	filename string
-
-
 }
 
 // NewGUILogger creates a new graphical logger window.

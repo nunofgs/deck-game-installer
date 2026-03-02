@@ -21,7 +21,6 @@ func (s *FindInstaller) Name() string {
 	return "Find Installer"
 }
 
-
 func (s *FindInstaller) Execute(ctx context.Context, state *State) error {
 	state.UI.Log("Scanning for installers in: " + state.MountPoint)
 
@@ -75,5 +74,3 @@ func (s *FindInstaller) Execute(ctx context.Context, state *State) error {
 	state.UI.Log("Selected: " + filepath.Base(state.InstallerPath))
 	return nil
 }
-
-

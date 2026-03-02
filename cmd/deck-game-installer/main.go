@@ -142,5 +142,3 @@ func buildPipeline(runner *installer.Runner, path string) {
 		os.Exit(1)
 	}
 }
-
-

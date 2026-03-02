@@ -22,7 +22,6 @@ func (s *MountISO) Name() string {
 	return "Mount ISO"
 }
 
-
 func (s *MountISO) Execute(ctx context.Context, state *State) error {
 	state.UI.Log("Mounting ISO: " + state.InputPath)
 
@@ -80,5 +79,3 @@ func cleanGameName(name string) string {
 	}
 	return clean
 }
-
-

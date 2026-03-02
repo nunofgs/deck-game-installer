@@ -19,7 +19,6 @@ func (s *FindGame) Name() string {
 	return "Find Game"
 }
 
-
 func (s *FindGame) Execute(ctx context.Context, state *State) error {
 	state.UI.Log("Scanning Proton prefix for installed game...")
 
@@ -82,5 +81,3 @@ func (s *FindGame) Execute(ctx context.Context, state *State) error {
 	state.UI.Log("Selected: " + filepath.Base(state.GameExePath))
 	return nil
 }
-
-

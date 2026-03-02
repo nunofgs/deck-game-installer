@@ -42,5 +42,3 @@ func (s *MountSMB) Execute(ctx context.Context, state *State) error {
 	state.UI.Log("ISO path updated to: " + state.InputPath)
 	return nil
 }
-
-

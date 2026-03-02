@@ -11,5 +11,3 @@ type Step interface {
 	// store any results needed by later steps in state.
 	Execute(ctx context.Context, state *State) error
 }
-
-

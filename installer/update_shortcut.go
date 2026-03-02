@@ -20,7 +20,6 @@ func (s *UpdateShortcut) Name() string {
 	return "Update Shortcut"
 }
 
-
 func (s *UpdateShortcut) Execute(ctx context.Context, state *State) error {
 	// If no game was found/selected, skip this step
 	if state.GameExePath == "" {
@@ -49,5 +48,3 @@ func (s *UpdateShortcut) Execute(ctx context.Context, state *State) error {
 
 	return nil
 }
-
-

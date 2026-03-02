@@ -25,7 +25,6 @@ func (s *WaitForExit) Name() string {
 	return "Wait for Installer"
 }
 
-
 func (s *WaitForExit) Execute(ctx context.Context, state *State) error {
 	state.UI.Log(">>> ACTION REQUIRED <<<")
 	state.UI.Log("Complete the installation in the game window and quit the installer.")
