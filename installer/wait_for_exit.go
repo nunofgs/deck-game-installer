@@ -69,11 +69,6 @@ func (s *WaitForExit) Execute(ctx context.Context, state *State) error {
 	return nil
 }
 
-// CanRollback returns false - nothing to roll back.
-func (s *WaitForExit) CanRollback() bool {
-	return false
-}
-
 // waitForSteamGameToExit monitors Steam's console log for process exit.
 // This matches v1's logic exactly: track "Adding process" and "Removing process" entries.
 func waitForSteamGameToExit(ctx context.Context, gameID string, logFn func(string)) error {

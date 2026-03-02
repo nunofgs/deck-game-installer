@@ -35,13 +35,6 @@ type Logger interface {
 	// Info shows an informational dialog to the user.
 	Info(title, message string)
 
-	// RollbackPrompt shows a dialog asking the user if they want to roll back
-	// completed operations after a failure.
-	// errorMsg is the error that caused the failure.
-	// completedOps is a list of human-readable descriptions of operations that can be undone.
-	// Returns true if the user wants to roll back.
-	RollbackPrompt(errorMsg string, completedOps []string) bool
-
 	// Wait blocks until the user acknowledges (clicks OK).
 	Wait()
 

@@ -2,7 +2,6 @@ package installer
 
 import (
 	"context"
-
 )
 
 // Unmount cleans up ISO and SMB mounts.
@@ -44,7 +43,4 @@ func (s *Unmount) Execute(ctx context.Context, state *State) error {
 	return nil
 }
 
-// CanRollback returns false - cleanup is a final step.
-func (s *Unmount) CanRollback() bool {
-	return false
-}
+

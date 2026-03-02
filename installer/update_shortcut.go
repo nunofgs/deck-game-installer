@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
-
 )
 
 // UpdateShortcut modifies the Steam shortcut to point to the installed game.
@@ -58,20 +57,4 @@ func (s *UpdateShortcut) Execute(ctx context.Context, state *State) error {
 	return nil
 }
 
-func (s *UpdateShortcut) Rollback(ctx context.Context, state *State) error {
-	// Restore original shortcut if we have the original values
-	if state.OriginalShortcutExe != "" && state.AppID != 0 {
-		state.UI.Log("Restoring original shortcut configuration...")
-		return state.Steam.UpdateShortcut(
-			state.AppID,
-			state.OriginalShortcutExe,
-			state.OriginalShortcutDir,
-			state.GameName+" (Installer)",
-		)
-	}
-	return nil
-}
 
-func (s *UpdateShortcut) CanRollback() bool {
-	return true
-}

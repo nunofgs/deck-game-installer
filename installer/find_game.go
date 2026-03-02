@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
-
 )
 
 // FindGame scans the Proton prefix for installed game executables.
@@ -78,7 +77,4 @@ func (s *FindGame) Execute(ctx context.Context, state *State) error {
 	return nil
 }
 
-// CanRollback returns false - this step doesn't modify anything.
-func (s *FindGame) CanRollback() bool {
-	return false
-}
+

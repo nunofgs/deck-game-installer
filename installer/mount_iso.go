@@ -88,14 +88,4 @@ func cleanGameName(name string) string {
 	return clean
 }
 
-func (s *MountISO) Rollback(ctx context.Context, state *State) error {
-	if state.ISOManager != nil && !state.ISOManager.WasExisting() {
-		state.UI.Log("Unmounting ISO...")
-		state.ISOManager.Unmount()
-	}
-	return nil
-}
 
-func (s *MountISO) CanRollback() bool {
-	return true
-}

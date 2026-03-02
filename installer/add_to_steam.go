@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
-
 )
 
 // AddToSteam creates a Steam shortcut for the installer.
@@ -46,23 +45,8 @@ func (s *AddToSteam) Execute(ctx context.Context, state *State) error {
 	}
 
 	state.AppID = appID
-	state.OriginalShortcutExe = state.InstallerPath
-	state.OriginalShortcutDir = startDir
-
 	state.UI.Log(fmt.Sprintf("Shortcut created with App ID: %d", appID))
 	return nil
-}
-
-func (s *AddToSteam) Rollback(ctx context.Context, state *State) error {
-	if state.AppID != 0 {
-		state.UI.Log("Removing Steam shortcut...")
-		return state.Steam.DeleteShortcut(state.AppID)
-	}
-	return nil
-}
-
-func (s *AddToSteam) CanRollback() bool {
-	return true
 }
 
 // deriveGameName extracts a game name from the installer path.

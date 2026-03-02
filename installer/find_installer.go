@@ -83,7 +83,4 @@ func (s *FindInstaller) Execute(ctx context.Context, state *State) error {
 	return nil
 }
 
-// CanRollback returns false as this step doesn't modify anything.
-func (s *FindInstaller) CanRollback() bool {
-	return false
-}
+

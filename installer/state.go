@@ -24,9 +24,7 @@ type State struct {
 	InstallerPath string // Path to the installer executable
 
 	// Steam state
-	AppID                int32  // Steam shortcut app ID
-	OriginalShortcutExe  string // Original exe path (for rollback after update)
-	OriginalShortcutDir  string // Original start dir (for rollback after update)
+	AppID int32 // Steam shortcut app ID
 	ProtonVersion       string // Selected Proton version
 	ProtonConfigChanged bool   // Whether we changed the Proton config
 

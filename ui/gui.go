@@ -611,15 +611,6 @@ func (g *GUILogger) Info(title, msg string) {
 	<-ch
 }
 
-func (g *GUILogger) RollbackPrompt(err string, ops []string) bool {
-	m := fmt.Sprintf("Error: %s\n\nChanges made:\n", err)
-	for _, o := range ops {
-		m += "  • " + o + "\n"
-	}
-	m += "\nUndo these changes?"
-	return g.Confirm("Installation Failed", m)
-}
-
 func (g *GUILogger) Wait() {
 	g.WaitWithMessage("Click OK to continue...")
 }

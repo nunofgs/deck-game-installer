@@ -51,14 +51,4 @@ func (s *MountSMB) Execute(ctx context.Context, state *State) error {
 	return nil
 }
 
-func (s *MountSMB) Rollback(ctx context.Context, state *State) error {
-	if state.SMBMount != nil && !state.SMBMount.WasExisting() {
-		state.UI.Log("Unmounting SMB share...")
-		return state.SMBMount.Unmount()
-	}
-	return nil
-}
 
-func (s *MountSMB) CanRollback() bool {
-	return true
-}

@@ -78,7 +78,4 @@ func pickDefaultProton(versions []string) string {
 	return ""
 }
 
-// CanRollback returns false - Proton config changes are harmless to leave.
-func (s *ConfigureProton) CanRollback() bool {
-	return false
-}
+
