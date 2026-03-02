@@ -1,9 +1,19 @@
 [tools]
 go = "1.25.7"
 
+[tasks.brew-deps]
+description = "Install Fyne's C library dependencies via Homebrew"
+run = "brew install mesa libx11 libxrandr libxcursor libxi libxinerama"
+
 [tasks.app]
-description = "Install the Go application"
-run = "rm -f $HOME/.local/bin/deck-game-installer && GOBIN=$HOME/.local/bin go install ./v2/cmd/deck-game-installer"
+description = "Build and install the application"
+run = """
+rm -f $HOME/.local/bin/deck-game-installer
+PKG_CONFIG_PATH=/home/linuxbrew/.linuxbrew/lib/pkgconfig \
+CGO_CFLAGS=-I/home/linuxbrew/.linuxbrew/include \
+CGO_LDFLAGS=-L/home/linuxbrew/.linuxbrew/lib \
+GOBIN=$HOME/.local/bin go install ./cmd/deck-game-installer
+"""
 
 [tasks.servicemenu]
 description = "Install the Dolphin service menu"
@@ -16,3 +26,7 @@ chmod +x ~/.local/share/kio/servicemenus/install-with-steam.desktop
 [tasks.install]
 description = "Install the application and service menu"
 depends = ["app", "servicemenu"]
+
+[tasks.vdfprint]
+description = "Build and install the vdfprint VDF pretty-printer"
+run = "GOBIN=$HOME/.local/bin go install ./cmd/vdfprint"

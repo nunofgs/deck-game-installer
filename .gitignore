@@ -19,3 +19,7 @@ dist/
 # Logs and temp files
 *.log
 *.tmp
+
+# Go binaries
+deck-game-installer
+vdfprint

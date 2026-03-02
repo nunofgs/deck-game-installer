@@ -2,10 +2,10 @@
 package installer
 
 import (
-	"deck-game-installer/v2/iso"
-	"deck-game-installer/v2/proton"
-	"deck-game-installer/v2/steam"
-	"deck-game-installer/v2/ui"
+	"deck-game-installer/iso"
+	"deck-game-installer/proton"
+	"deck-game-installer/steam"
+	"deck-game-installer/ui"
 )
 
 // State holds all shared data passed between workflow steps.

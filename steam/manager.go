@@ -13,7 +13,7 @@ import (
 	"syscall"
 	"time"
 
-	"deck-game-installer/v2/vdf"
+	"deck-game-installer/vdf"
 )
 
 // Manager handles Steam integration: shortcuts, configuration, and process management.
@@ -142,12 +142,14 @@ func (m *Manager) FindAppIDByPath(exePath string) (int32, error) {
 // AddShortcut creates a new Steam shortcut or returns the existing app ID if already present.
 func (m *Manager) AddShortcut(appName, exePath, args, startDir string) (int32, error) {
 	path := m.ShortcutsPath()
+    fmt.Printf("[AddShortcut] Path: %s\n", path)
 
 	// Load existing shortcuts or create new structure
 	obj := map[string]KVValue{"shortcuts": map[string]KVValue{}}
 	if data, err := os.ReadFile(path); err == nil {
 		if parsed, err := ReadBinaryVDF(data); err == nil {
 			obj = parsed
+            fmt.Printf("[AddShortcut] Loaded existing shortcuts from %s\n", path)
 		}
 	}
 
@@ -170,6 +172,7 @@ func (m *Manager) AddShortcut(appName, exePath, args, startDir string) (int32, e
 		exe, _ := entry["Exe"].(string)
 		if exe == quoted || exe == exePath {
 			if appid, ok := entry["appid"].(int32); ok {
+                    fmt.Printf("[AddShortcut] Shortcut already exists: AppID=%d, Exe=%s\n", appid, exe)
 				return appid, nil // Already exists
 			}
 		}
@@ -197,6 +200,7 @@ func (m *Manager) AddShortcut(appName, exePath, args, startDir string) (int32, e
 	}
 
 	// Create shortcut entry
+    fmt.Printf("[AddShortcut] Creating/updating shortcut: AppID=%d, AppName=%s, Exe=%s, Args=%s, StartDir=%s\n", appid, appName, exePath, args, startDir)
 	shortcuts[key] = map[string]KVValue{
 		"appid":               appid,
 		"AppName":             appName,
@@ -222,12 +226,15 @@ func (m *Manager) AddShortcut(appName, exePath, args, startDir string) (int32, e
 	_ = os.MkdirAll(filepath.Dir(path), 0o755)
 	data, err := WriteBinaryVDF(obj)
 	if err != nil {
+        fmt.Printf("[AddShortcut] Error serializing shortcuts: %v\n", err)
 		return 0, err
 	}
 
 	if err := os.WriteFile(path, data, 0o644); err != nil {
+        fmt.Printf("[AddShortcut] Error writing shortcuts file: %v\n", err)
 		return 0, err
 	}
+    fmt.Printf("[AddShortcut] Successfully wrote shortcuts to %s\n", path)
 
 	return appid, nil
 }
@@ -422,31 +429,40 @@ func (m *Manager) GetProtonVersion(appID int32) (string, error) {
 
 // SetProtonVersion configures the Proton version for an app ID.
 func (m *Manager) SetProtonVersion(appID int32, protonVersion string) error {
-	path := m.ConfigPath()
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return err
-	}
+	   path := m.ConfigPath()
+	   fmt.Printf("[SetProtonVersion] Path: %s\n", path)
+	   data, err := os.ReadFile(path)
+	   if err != nil {
+		   fmt.Printf("[SetProtonVersion] Error reading config: %v\n", err)
+		   return err
+	   }
 
-	root, err := vdf.Parse(string(data))
-	if err != nil {
-		return err
-	}
+	   root, err := vdf.Parse(string(data))
+	   if err != nil {
+		   fmt.Printf("[SetProtonVersion] Error parsing VDF: %v\n", err)
+		   return err
+	   }
 
-	// Ensure the nested path exists
-	mapping := ensureNestedMap(root, "InstallConfigStore", "Software", "Valve", "Steam", "CompatToolMapping")
+	   // Ensure the nested path exists
+	   mapping := ensureNestedMap(root, "InstallConfigStore", "Software", "Valve", "Steam", "CompatToolMapping")
 
-	unsigned := uint32(appID)
-	key := strconv.FormatUint(uint64(unsigned), 10)
+	   unsigned := uint32(appID)
+	   key := strconv.FormatUint(uint64(unsigned), 10)
 
-	mapping[key] = map[string]any{
-		"name":     protonVersion,
-		"config":   "",
-		"priority": "250",
-	}
+	   fmt.Printf("[SetProtonVersion] Setting Proton for AppID=%d to '%s'\n", appID, protonVersion)
+	   mapping[key] = map[string]any{
+		   "name":     protonVersion,
+		   "config":   "",
+		   "priority": "250",
+	   }
 
-	out := vdf.Dump(root)
-	return os.WriteFile(path, []byte(out), 0o644)
+	   out := vdf.Dump(root)
+	   if err := os.WriteFile(path, []byte(out), 0o644); err != nil {
+		   fmt.Printf("[SetProtonVersion] Error writing config: %v\n", err)
+		   return err
+	   }
+	   fmt.Printf("[SetProtonVersion] Successfully set Proton version for AppID=%d to '%s' in %s\n", appID, protonVersion, path)
+	   return nil
 }
 
 // ensureNestedMap traverses/creates nested maps along a key path.

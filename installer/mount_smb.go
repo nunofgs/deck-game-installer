@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"deck-game-installer/v2/iso"
+	"deck-game-installer/iso"
 )
 
 // MountSMB mounts an SMB share for local access.

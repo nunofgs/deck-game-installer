@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"deck-game-installer/v2/iso"
+	"deck-game-installer/iso"
 )
 
 // MountISO mounts an ISO file for access.

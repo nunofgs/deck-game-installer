@@ -149,19 +149,19 @@ func NewGUILogger(windowTitle, filename string) *GUILogger {
 			       })
 			       g.proceedBtn.Disable()
 
-	       g.openSteamBtn = widget.NewButton("Open in Steam", func() {
-		       exec.Command("xdg-open", "steam://open/library").Start()
-		       // Start the countdown after Steam is restarted
-		       g.proceedBtn.Disable()
-		       go func(btn *widget.Button) {
-			       for i := 10; i > 0; i-- {
-				       btn.SetText(fmt.Sprintf("I finished the installation. Please proceed. (%ds)", i))
-				       time.Sleep(time.Second)
-			       }
-			       btn.SetText("I finished the installation. Please proceed.")
-			       btn.Enable()
-		       }(g.proceedBtn)
-	       })
+			       g.openSteamBtn = widget.NewButton("Open in Steam", func() {
+				       exec.Command("steam", "steam://open/library").Start()
+				       // Start the countdown after Steam is restarted
+				       g.proceedBtn.Disable()
+				       go func(btn *widget.Button) {
+					       for i := 10; i > 0; i-- {
+						       btn.SetText(fmt.Sprintf("I finished the installation. Please proceed. (%ds)", i))
+						       time.Sleep(time.Second)
+					       }
+					       btn.SetText("I finished the installation. Please proceed.")
+					       btn.Enable()
+				       }(g.proceedBtn)
+			       })
 
 	g.closeBtn = widget.NewButton("Close", func() {
 		a.Quit()
@@ -171,7 +171,7 @@ func NewGUILogger(windowTitle, filename string) *GUILogger {
 	g.buildUI()
 
 	// Log file
-	logPath := filepath.Join(os.TempDir(), "deck-game-installer-v2.log")
+	logPath := filepath.Join(os.TempDir(), "deck-game-installer.log")
 	g.logFile, _ = os.Create(logPath)
 
 	w.SetCloseIntercept(func() {
@@ -705,7 +705,7 @@ func (g *GUILogger) ShowComplete() {
 	})
 }
 
-func (g *GUILogger) ShowFailure(errMsg string) {
+func (g *GUILogger) ShowFailed(errMsg string) {
 	g.runOnUI(func() {
 		g.statusLabel.SetText("Installation failed")
 

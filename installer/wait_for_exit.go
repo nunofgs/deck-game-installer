@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"deck-game-installer/v2/steam"
+	"deck-game-installer/steam"
 )
 
 // WaitForExit monitors Steam's console log to detect when the installer exits.

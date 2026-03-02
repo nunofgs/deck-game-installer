@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"strings"
 
-	"deck-game-installer/v2/vdf"
+	"deck-game-installer/vdf"
 )
 
 // Manager handles Proton-related operations.
@@ -155,7 +155,7 @@ func (m *Manager) PrefixPath(appID int32) string {
 // Returns executables sorted by modification time (newest first).
 func (m *Manager) ScanPrefixForExecutables(appID int32) []string {
 	prefix := m.PrefixPath(appID)
-	logPath := "/tmp/deck-game-installer-v2.log"
+	logPath := "/tmp/deck-game-installer.log"
 	logFile, _ := os.OpenFile(logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	defer logFile.Close()
 

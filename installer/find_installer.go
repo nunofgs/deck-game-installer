@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"deck-game-installer/v2/iso"
+	"deck-game-installer/iso"
 )
 
 // FindInstaller scans the mounted ISO for installer executables.
