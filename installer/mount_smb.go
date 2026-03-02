@@ -10,7 +10,6 @@ import (
 
 // MountSMB mounts an SMB share for local access.
 type MountSMB struct {
-	BaseStep
 	smbInfo *iso.SMBInfo
 }
 

@@ -8,7 +8,6 @@ import (
 
 // FindGame scans the Proton prefix for installed game executables.
 type FindGame struct {
-	BaseStep
 }
 
 // NewFindGame creates a new find game step.

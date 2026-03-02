@@ -12,5 +12,4 @@ type Step interface {
 	Execute(ctx context.Context, state *State) error
 }
 
-// BaseStep can be embedded by steps that need no extra behaviour.
-type BaseStep struct{}
+

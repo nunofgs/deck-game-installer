@@ -7,7 +7,6 @@ import (
 
 // FinalRestart restarts Steam one final time to recognize the updated shortcut.
 type FinalRestart struct {
-	BaseStep
 }
 
 func NewFinalRestart() *FinalRestart { return &FinalRestart{} }

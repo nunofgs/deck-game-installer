@@ -7,7 +7,6 @@ import (
 
 // ShutdownSteam shuts down the Steam client.
 type ShutdownSteam struct {
-	BaseStep
 }
 
 func NewShutdownSteam() *ShutdownSteam { return &ShutdownSteam{} }

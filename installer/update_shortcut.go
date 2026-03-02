@@ -9,7 +9,6 @@ import (
 
 // UpdateShortcut modifies the Steam shortcut to point to the installed game.
 type UpdateShortcut struct {
-	BaseStep
 }
 
 // NewUpdateShortcut creates a new update shortcut step.

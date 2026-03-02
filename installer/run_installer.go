@@ -9,7 +9,6 @@ import (
 
 // RunInstaller launches the installer by starting Steam with the launch URL.
 type RunInstaller struct {
-	BaseStep
 }
 
 func NewRunInstaller() *RunInstaller { return &RunInstaller{} }

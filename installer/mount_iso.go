@@ -11,7 +11,6 @@ import (
 
 // MountISO mounts an ISO file for access.
 type MountISO struct {
-	BaseStep
 }
 
 // NewMountISO creates a new ISO mount step.

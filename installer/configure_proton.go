@@ -8,7 +8,6 @@ import (
 
 // ConfigureProton sets the Proton version for the Steam shortcut in config.vdf.
 type ConfigureProton struct {
-	BaseStep
 }
 
 func NewConfigureProton() *ConfigureProton { return &ConfigureProton{} }

@@ -10,7 +10,6 @@ import (
 
 // FindInstaller scans the mounted ISO for installer executables.
 type FindInstaller struct {
-	BaseStep
 }
 
 // NewFindInstaller creates a new find installer step.

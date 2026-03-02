@@ -14,7 +14,6 @@ import (
 
 // WaitForExit monitors Steam's console log to detect when the installer exits.
 type WaitForExit struct {
-	BaseStep
 }
 
 // NewWaitForExit creates a new wait for exit step.

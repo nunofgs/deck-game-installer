@@ -9,7 +9,6 @@ import (
 
 // AddToSteam creates a Steam shortcut for the installer.
 type AddToSteam struct {
-	BaseStep
 }
 
 func NewAddToSteam() *AddToSteam { return &AddToSteam{} }
