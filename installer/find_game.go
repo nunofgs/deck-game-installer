@@ -70,7 +70,6 @@ func (s *FindGame) Execute(ctx context.Context, state *State) error {
 	}
 
 	state.GameExePath = selected
-	state.GameStartDir = filepath.Dir(selected)
 	state.UI.Log("Selected: " + filepath.Base(selected))
 	return nil
 }

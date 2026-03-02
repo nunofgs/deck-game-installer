@@ -35,7 +35,7 @@ func (s *UpdateShortcut) Execute(ctx context.Context, state *State) error {
 	err := state.Steam.UpdateShortcut(
 		state.AppID,
 		state.GameExePath,
-		state.GameStartDir,
+		filepath.Dir(state.GameExePath),
 		gameName,
 	)
 

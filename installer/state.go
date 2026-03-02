@@ -28,8 +28,7 @@ type State struct {
 	ProtonVersion string // Proton version selected for this shortcut
 
 	// Installed game
-	GameExePath  string // Path to the installed game executable
-	GameStartDir string // Start directory for the game
+	GameExePath string // Path to the installed game executable
 
 	// Dependencies
 	UI     ui.Logger
