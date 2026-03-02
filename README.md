@@ -2,8 +2,9 @@
 
 😩 Add a non-Steam shortcut. Set compatibility to Proton. Boot into Desktop Mode. Mount the ISO. Run the installer. Hunt down where it installed to. Go back and fix the shortcut path. If you've installed more than one game on Steam Deck the manual way, you know exactly how tedious this gets.
 
-🎮 deck-game-installer cuts all of that down to a right-click. Point it at an ISO or EXE — local, or straight from a network share — and it handles mounting, Proton setup, running the installer, finding the game, and updating the shortcut automatically.
+This tool cuts all of that down to a right-click. Point it at an ISO or EXE — local, or straight from a network share — and it handles mounting, Proton setup, running the installer, finding the game, and updating the shortcut automatically.
 
+**Right-click → Install with Steam → Play.**
 ---
 
 ## Installation
