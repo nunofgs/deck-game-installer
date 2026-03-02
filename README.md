@@ -1,8 +1,8 @@
 # deck-game-installer
 
-😩 Installing a Windows game on Steam Deck manually means juggling shortcuts, Proton settings, ISO mounts, and installer paths — every single time. It's tedious and it shouldn't be this hard.
+Installing a Windows game on Steam Deck manually means juggling shortcuts, Proton settings, ISO mounts, and installer paths — every single time. It's tedious and it shouldn't be this hard. 😩
 
-🎮 **Right-click → Install with Steam → Play.**
+**Right-click → Install with Steam → Play.**
 
 ---
 
