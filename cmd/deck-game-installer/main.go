@@ -91,7 +91,7 @@ func runInstall(path string) {
 // buildPipeline adds the appropriate steps based on the input path type.
 func buildPipeline(runner *installer.Runner, path string) {
 	// Check if it's an SMB path
-	smbInfo := iso.ParseKioPath(path)
+	smbInfo := iso.ParseSMBPath(path)
 	isISO := strings.HasSuffix(strings.ToLower(path), ".iso")
 	isEXE := strings.HasSuffix(strings.ToLower(path), ".exe")
 

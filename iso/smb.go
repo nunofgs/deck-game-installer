@@ -24,19 +24,20 @@ type SMBMount struct {
 	wasExisting bool   // True if we found an existing mount
 }
 
-// ParseKioPath extracts SMB info from a KDE/KIO path.
-// Returns nil if the path is not an SMB path.
-func ParseKioPath(path string) *SMBInfo {
-	re := regexp.MustCompile(`/smb/([^/]+)/([^/]+)/(.*)$`)
-	match := re.FindStringSubmatch(path)
-	if len(match) < 4 {
-		return nil
+// ParseSMBPath extracts SMB info from either a standard smb:// URI or a KDE
+// KIO path (/smb/server/share/...). Returns nil if the path is neither.
+func ParseSMBPath(path string) *SMBInfo {
+	// Standard URI: smb://server/share/rel/path
+	if re := regexp.MustCompile(`^smb://([^/]+)/([^/]+)/?(.*)`); true {
+		if m := re.FindStringSubmatch(path); len(m) == 4 {
+			return &SMBInfo{Server: m[1], Share: m[2], RelPath: m[3]}
+		}
 	}
-	return &SMBInfo{
-		Server:  match[1],
-		Share:   match[2],
-		RelPath: match[3],
+	// KDE KIO path: /run/user/.../smb/server/share/rel/path or /smb/server/share/rel/path
+	if m := regexp.MustCompile(`/smb/([^/]+)/([^/]+)/?(.*)`).FindStringSubmatch(path); len(m) == 4 {
+		return &SMBInfo{Server: m[1], Share: m[2], RelPath: m[3]}
 	}
+	return nil
 }
 
 // RemountSMB mounts an SMB share locally for direct access.
