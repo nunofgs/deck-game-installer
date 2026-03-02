@@ -46,6 +46,13 @@ func (s *FindGame) Execute(ctx context.Context, state *State) error {
 		if err := state.Steam.DeleteShortcut(state.AppID); err != nil {
 			return fmt.Errorf("no game executables found; also failed to remove shortcut: %w", err)
 		}
+		state.UI.Log("Restarting Steam to apply shortcut removal...")
+		if err := state.Steam.ShutdownSteam(ctx); err != nil {
+			return fmt.Errorf("shortcut removed but failed to restart Steam: %w", err)
+		}
+		if err := state.Steam.StartSteam(); err != nil {
+			return fmt.Errorf("shortcut removed but failed to start Steam: %w", err)
+		}
 		return fmt.Errorf("no game executables found — shortcut removed")
 	}
 
