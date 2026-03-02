@@ -161,9 +161,9 @@ func (m *Manager) ScanPrefixForExecutables(appID int32) ([]string, error) {
 		return results, fmt.Errorf("error scanning prefix: %w", err)
 	}
 
-	// Also resolve executables referenced by desktop/start-menu shortcuts,
-	// which catches games installed outside the Proton prefix.
-	shortcutExes := m.scanShortcutsForExecutables(appID)
+	// Also scan Proton-generated desktop shortcuts, which carry the real Linux
+	// working directory and catch games installed outside the prefix (e.g. Z: drive).
+	shortcutExes := m.scanProtonShortcuts(appID, excludePatterns)
 	results = dedupeByRealPath(append(results, shortcutExes...))
 
 	sort.Slice(results, func(i, j int) bool {
@@ -178,104 +178,73 @@ func (m *Manager) ScanPrefixForExecutables(appID int32) ([]string, error) {
 	return results, nil
 }
 
-// scanShortcutsForExecutables finds .lnk files in the Windows desktop and
-// start-menu locations inside the Proton prefix and resolves their targets
-// to Linux paths.
-func (m *Manager) scanShortcutsForExecutables(appID int32) []string {
-	pfx := m.prefixRoot(appID)
-	driveC := filepath.Join(pfx, "drive_c")
-	user := filepath.Join(driveC, "users", "steamuser")
-
-	shortcutDirs := []string{
-		filepath.Join(user, "Desktop"),
-		filepath.Join(user, "AppData", "Roaming", "Microsoft", "Windows", "Start Menu", "Programs"),
-		filepath.Join(driveC, "ProgramData", "Microsoft", "Windows", "Start Menu", "Programs"),
+// scanProtonShortcuts reads Proton-generated .desktop files from the
+// proton_shortcuts directory and returns executables found in their
+// working directories. These shortcuts carry a real Linux Path= field,
+// so they work for games installed to any drive including Z:.
+func (m *Manager) scanProtonShortcuts(appID int32, excludePatterns []*regexp.Regexp) []string {
+	dir := filepath.Join(m.PrefixPath(appID), "proton_shortcuts")
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil
 	}
 
 	var results []string
-	for _, dir := range shortcutDirs {
-		if _, err := os.Stat(dir); err != nil {
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(strings.ToLower(e.Name()), ".desktop") {
 			continue
 		}
-		// Walk errors inside the callback are handled per-file; a top-level
-		// WalkDir error just means we skip this shortcut directory entirely.
-		if walkErr := filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
-			if err != nil || d.IsDir() || !strings.HasSuffix(strings.ToLower(d.Name()), ".lnk") {
-				return nil
-			}
-			data, err := os.ReadFile(path)
-			if err != nil {
-				return nil
-			}
-			winTarget, err := parseLNKTarget(data)
-			if err != nil {
-				return nil
-			}
-			linuxPath, err := resolveWindowsPath(pfx, winTarget)
-			if err != nil {
-				return nil
-			}
-			results = append(results, linuxPath)
-			return nil
-		}); walkErr != nil {
-			// Non-fatal: this shortcut dir simply yielded no results.
+		// Skip uninstaller shortcuts.
+		if strings.Contains(strings.ToLower(e.Name()), "uninstall") {
 			continue
+		}
+
+		data, err := os.ReadFile(filepath.Join(dir, e.Name()))
+		if err != nil {
+			continue
+		}
+
+		workDir := parseDesktopPath(string(data))
+		if workDir == "" {
+			continue
+		}
+
+		// Scan the working directory (non-recursive) for game executables.
+		exes, err := os.ReadDir(workDir)
+		if err != nil {
+			continue
+		}
+		for _, f := range exes {
+			if f.IsDir() {
+				continue
+			}
+			name := strings.ToLower(f.Name())
+			if !strings.HasSuffix(name, ".exe") {
+				continue
+			}
+			excluded := false
+			for _, re := range excludePatterns {
+				if re.MatchString(name) {
+					excluded = true
+					break
+				}
+			}
+			if !excluded {
+				results = append(results, filepath.Join(workDir, f.Name()))
+			}
 		}
 	}
 	return results
 }
 
-// resolveWindowsPath translates a Windows absolute path (e.g. C:\foo\bar.exe)
-// to a Linux path by following the dosdevices symlink for the drive letter and
-// doing a case-insensitive component walk.
-func resolveWindowsPath(pfxRoot, winPath string) (string, error) {
-	if len(winPath) < 3 || winPath[1] != ':' {
-		return "", fmt.Errorf("not an absolute Windows path: %q", winPath)
-	}
-	drive := strings.ToLower(string(winPath[0]))
-	rest := strings.ReplaceAll(winPath[3:], "\\", string(filepath.Separator))
-
-	// Resolve the dosdevice symlink for the drive letter.
-	dosLink := filepath.Join(pfxRoot, "dosdevices", drive+":")
-	driveRoot, err := filepath.EvalSymlinks(dosLink)
-	if err != nil {
-		return "", fmt.Errorf("cannot resolve drive %s: %w", drive+":", err)
-	}
-
-	// Walk each path component case-insensitively.
-	resolved, err := caseInsensitivePath(driveRoot, strings.Split(rest, string(filepath.Separator)))
-	if err != nil {
-		return "", err
-	}
-	return resolved, nil
-}
-
-// caseInsensitivePath walks base/components using case-insensitive directory
-// lookups at each level, returning the real path.
-func caseInsensitivePath(base string, components []string) (string, error) {
-	current := base
-	for _, comp := range components {
-		if comp == "" {
-			continue
+// parseDesktopPath extracts the Path= value from a .desktop file.
+func parseDesktopPath(content string) string {
+	for _, line := range strings.Split(content, "\n") {
+		if strings.HasPrefix(line, "Path=") {
+			return strings.TrimSpace(strings.TrimPrefix(line, "Path="))
 		}
-		entries, err := os.ReadDir(current)
-		if err != nil {
-			return "", fmt.Errorf("cannot read dir %q: %w", current, err)
-		}
-		compLower := strings.ToLower(comp)
-		found := ""
-		for _, e := range entries {
-			if strings.ToLower(e.Name()) == compLower {
-				found = e.Name()
-				break
-			}
-		}
-		if found == "" {
-			return "", fmt.Errorf("path component %q not found in %q", comp, current)
-		}
-		current = filepath.Join(current, found)
 	}
-	return current, nil
+	return ""
 }
 
 // dedupeByRealPath removes duplicate paths, resolving symlinks so that two
