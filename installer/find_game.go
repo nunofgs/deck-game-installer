@@ -69,15 +69,8 @@ func (s *FindGame) Execute(ctx context.Context, state *State) error {
 		return nil
 	}
 
-	// Find the selected path
-	for _, exe := range executables {
-		if exe == selected {
-			state.GameExePath = exe
-			state.GameStartDir = filepath.Dir(exe)
-			break
-		}
-	}
-
-	state.UI.Log("Selected: " + filepath.Base(state.GameExePath))
+	state.GameExePath = selected
+	state.GameStartDir = filepath.Dir(selected)
+	state.UI.Log("Selected: " + filepath.Base(selected))
 	return nil
 }
