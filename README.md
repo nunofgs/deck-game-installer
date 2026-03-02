@@ -21,9 +21,11 @@ Right-click any ISO or EXE in Dolphin and choose **Install with Steam**.
 ![Right-click context menu in Dolphin](screenshots/right_click.png)
 
 <details>
-<summary>Installation wizard</summary>
+<summary>More screenshots</summary>
 
 ![Installation wizard](screenshots/wizard.png)
+
+![Choosing the game executable](screenshots/choose_executable.png)
 
 </details>
 
