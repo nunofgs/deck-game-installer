@@ -14,7 +14,11 @@ curl -fsSL https://github.com/nunofgs/deck-game-installer/releases/latest/downlo
 
 Right-click any ISO or EXE in Dolphin and choose **Install with Steam**.
 
-<!-- screenshot -->
+![Right-click context menu in Dolphin](screenshots/right_click.png)
+
+The installer runs in a guided window that tracks each step and prompts you when input is needed.
+
+![Installation wizard](screenshots/wizard.png)
 
 ### From the terminal
 
