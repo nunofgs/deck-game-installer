@@ -23,21 +23,4 @@ func (s *ShutdownSteam) Execute(ctx context.Context, state *State) error {
 	return nil
 }
 
-// StartSteam launches the Steam client.
-type StartSteam struct {
-	BaseStep
-}
 
-func NewStartSteam() *StartSteam { return &StartSteam{} }
-func (s *StartSteam) Name() string {
-	return "Start Steam"
-}
-func (s *StartSteam) Description(state *State) string {
-	return "Steam client started"
-}
-func (s *StartSteam) Execute(ctx context.Context, state *State) error {
-	state.UI.Log("Starting Steam...")
-	state.Steam.StartSteam()
-	state.UI.Log("Steam started")
-	return nil
-}

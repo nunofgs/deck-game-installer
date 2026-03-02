@@ -509,8 +509,10 @@ func (m *Manager) ShutdownSteam(ctx context.Context) error {
 }
 
 // StartSteam launches Steam in the background, detached from this process.
-func (m *Manager) StartSteam() {
-	cmd := exec.Command("steam")
+// If a steam:// URL is provided it is passed as an argument so Steam handles
+// it as soon as it finishes initialising.
+func (m *Manager) StartSteam(args ...string) {
+	cmd := exec.Command("steam", args...)
 	cmd.Stdin = nil
 	cmd.Stdout = nil
 	cmd.Stderr = nil
@@ -585,16 +587,4 @@ func (m *Manager) waitForSteamShutdown(ctx context.Context) error {
 	}
 }
 
-// LaunchApp launches a Steam app by its app ID using the steam:// URL protocol.
-// LaunchApp launches a Steam app by its app ID using the steam:// URL protocol.
-// Accepts a logger function for UI logging.
-func (m *Manager) LaunchApp(appID int32, logFn func(string)) error {
-	urlAppID := GetURLAppID(appID)
-	url := "steam://rungameid/" + urlAppID
-	cmd := fmt.Sprintf("steam %s", url)
-	fmt.Printf("[steamer] Launching Steam command: %s\n", cmd)
-	if logFn != nil {
-		 logFn(fmt.Sprintf("Launching Steam command: %s", cmd))
-	}
-	return exec.Command("steam", url).Start()
-}
+
