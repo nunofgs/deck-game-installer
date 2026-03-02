@@ -3,7 +3,6 @@ package installer
 import (
 	"context"
 	"fmt"
-	"strings"
 )
 
 // ConfigureProton sets the Proton version for the Steam shortcut in config.vdf.
@@ -29,7 +28,7 @@ func (s *ConfigureProton) Execute(ctx context.Context, state *State) error {
 	}
 	state.UI.Log(fmt.Sprintf("Available Proton versions: %v", versions))
 
-	protonVersion := pickDefaultProton(versions)
+	protonVersion := versions[0] // GetAvailableProtonVersions sorts Experimental first
 	state.UI.Log("Setting Proton version: " + protonVersion)
 
 	if err := state.Steam.SetProtonVersion(state.AppID, protonVersion); err != nil {
@@ -41,12 +40,4 @@ func (s *ConfigureProton) Execute(ctx context.Context, state *State) error {
 	return nil
 }
 
-// pickDefaultProton selects Proton Experimental if available, otherwise the first version.
-func pickDefaultProton(versions []string) string {
-	for _, v := range versions {
-		if strings.Contains(strings.ToLower(v), "experimental") {
-			return v
-		}
-	}
-	return versions[0]
-}
+
