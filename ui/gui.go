@@ -516,6 +516,7 @@ func (g *GUILogger) getStatusColor(status StepStatusType) color.Color {
 func (g *GUILogger) Confirm(title, msg string) bool {
 	ch := make(chan bool, 1)
 	g.runOnUI(func() {
+		g.window.RequestFocus()
 		dialog.NewConfirm(title, msg, func(ok bool) { ch <- ok }, g.window).Show()
 	})
 	return <-ch
@@ -563,6 +564,7 @@ func (g *GUILogger) Select(title, prompt string, opts []string) (string, bool) {
 	}
 
 	g.runOnUI(func() {
+		g.window.RequestFocus()
 		d := dialog.NewCustomConfirm(title, "OK", "Cancel",
 			container.NewBorder(widget.NewLabel(p), nil, nil, nil, container.NewVScroll(list)),
 			func(ok bool) {
