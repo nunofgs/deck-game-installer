@@ -8,7 +8,7 @@ You can install games in two ways:
 
 1. **From an installer executable** - Point directly to a Windows setup file (e.g., `setup.exe`)
    ```bash
-   deck-game-installer install /path/to/setup.exe
+   deck-game-installer /path/to/setup.exe
    ```
 
 2. **From an ISO file** - Point to a game disc image, which can be stored:
