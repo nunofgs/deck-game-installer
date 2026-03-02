@@ -147,19 +147,9 @@ func NewGUILogger(windowTitle, filename string) *GUILogger {
 			       })
 			       g.proceedBtn.Disable()
 
-			       g.openSteamBtn = widget.NewButton("Open in Steam", func() {
-				       exec.Command("steam", "steam://open/library").Start()
-				       // Start the countdown after Steam is restarted
-				       g.proceedBtn.Disable()
-				       go func(btn *widget.Button) {
-					       for i := 10; i > 0; i-- {
-						       btn.SetText(fmt.Sprintf("I finished the installation. Please proceed. (%ds)", i))
-						       time.Sleep(time.Second)
-					       }
-					       btn.SetText("I finished the installation. Please proceed.")
-					       btn.Enable()
-				       }(g.proceedBtn)
-			       })
+		g.openSteamBtn = widget.NewButton("Open in Steam", func() {
+			exec.Command("xdg-open", "steam://open/library").Start()
+		})
 
 	g.closeBtn = widget.NewButton("Close", func() {
 		a.Quit()
