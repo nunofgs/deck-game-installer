@@ -11,6 +11,9 @@ echo "Installing deck-game-installer..."
 
 mkdir -p "$BIN_DIR" "$MENU_DIR"
 
+# If the required files are present next to this script (e.g. when running from an
+# extracted zip), install them directly. Otherwise download them from GitHub releases
+# (e.g. when piped via curl).
 if [ -n "$SCRIPT_DIR" ] && [ -f "$SCRIPT_DIR/deck-game-installer" ] && [ -f "$SCRIPT_DIR/install-with-steam.desktop" ]; then
   echo "(Installing from local files...)"
   cp "$SCRIPT_DIR/deck-game-installer" "$BIN_DIR/deck-game-installer"
