@@ -111,10 +111,11 @@ func waitForSteamGameToExit(ctx context.Context, gameID string, logFn func(strin
 				continue
 			}
 
-			// Seek to last known position
-			file.Seek(offset, 0)
+			if _, err := file.Seek(offset, 0); err != nil {
+				file.Close()
+				continue
+			}
 
-			// Read new content
 			buf := make([]byte, 8192)
 			n, _ := file.Read(buf)
 			if n > 0 {
