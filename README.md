@@ -1,12 +1,8 @@
 # deck-game-installer
 
-Installs Windows games on Steam Deck via Proton. Point it at an ISO or installer EXE and it handles the rest — mounting, Steam shortcut creation, Proton setup, and finding the game executable when the installer finishes.
+😩 Add a non-Steam shortcut. Set compatibility to Proton. Boot into Desktop Mode. Mount the ISO. Run the installer. Hunt down where it installed to. Go back and fix the shortcut path. If you've installed more than one game on Steam Deck the manual way, you know exactly how tedious this gets.
 
----
-
-😩 You know the drill. Add shortcut to Steam, set compatibility to Proton, boot into desktop mode, run the installer, figure out where it installed to, update the shortcut path, set the launch options... it's a lot for what should be a simple thing.
-
-🎮 This tool does all of that for you. Right-click an ISO or EXE, hit install, and by the end you've got a working game in your Steam library.
+🎮 deck-game-installer cuts all of that down to a right-click. Point it at an ISO or EXE — local, or straight from a network share — and it handles mounting, Proton setup, running the installer, finding the game, and updating the shortcut automatically.
 
 ---
 
