@@ -65,19 +65,7 @@ func (r *Runner) Run(ctx context.Context) error {
 	return nil
 }
 
-// cleanup silently unmounts any ISO or SMB share we mounted.
+// cleanup unmounts any ISO or SMB share we created, called on error.
 func (r *Runner) cleanup() {
-	s := r.state
-	if s.ISOManager != nil && !s.ISOManager.WasExisting() {
-		s.UI.Log("Unmounting ISO...")
-		s.ISOManager.Unmount()
-		s.ISOManager = nil
-	}
-	if s.SMBMount != nil && !s.SMBMount.WasExisting() {
-		s.UI.Log("Unmounting network share...")
-		if err := s.SMBMount.Unmount(); err != nil {
-			s.UI.Log("Warning: failed to unmount SMB share: " + err.Error())
-		}
-		s.SMBMount = nil
-	}
+	unmountAll(r.state)
 }
