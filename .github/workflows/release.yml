@@ -27,7 +27,8 @@ jobs:
             libxrandr-dev \
             libxcursor-dev \
             libxi-dev \
-            libxinerama-dev
+            libxinerama-dev \
+            libxxf86vm-dev
 
       - name: Build
         run: go build -trimpath -ldflags="-s -w" -o deck-game-installer ./cmd/deck-game-installer
