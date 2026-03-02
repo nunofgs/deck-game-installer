@@ -24,18 +24,9 @@ func main() {
 	}
 
 	switch os.Args[1] {
-	case "install":
-		if len(os.Args) < 3 {
-			printUsage()
-			os.Exit(1)
-		}
-		runInstall(os.Args[2])
-
 	case "help", "-h", "--help":
 		printUsage()
-
 	default:
-		// Treat single argument as install path for convenience
 		runInstall(os.Args[1])
 	}
 }
@@ -44,11 +35,10 @@ func printUsage() {
 	fmt.Println("Deck Game Installer")
 	fmt.Println()
 	fmt.Println("Usage:")
-	fmt.Println("  deck-game-installer install <path-to-iso-or-exe>")
 	fmt.Println("  deck-game-installer <path-to-iso-or-exe>")
 	fmt.Println()
 	fmt.Println("Examples:")
-	fmt.Println("  deck-game-installer install /path/to/game.iso")
+	fmt.Println("  deck-game-installer /path/to/game.iso")
 	fmt.Println("  deck-game-installer /path/to/setup.exe")
 	fmt.Println("  deck-game-installer smb://server/share/game.iso")
 }
