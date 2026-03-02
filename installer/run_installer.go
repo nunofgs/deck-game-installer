@@ -13,9 +13,6 @@ type RunInstaller struct {
 
 func NewRunInstaller() *RunInstaller { return &RunInstaller{} }
 func (s *RunInstaller) Name() string { return "Run Installer" }
-func (s *RunInstaller) Description(state *State) string {
-	return "Installer launched via Steam"
-}
 
 func (s *RunInstaller) Execute(ctx context.Context, state *State) error {
 	urlAppID := steam.GetURLAppID(state.AppID)

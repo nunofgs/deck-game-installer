@@ -22,12 +22,6 @@ func (s *FindInstaller) Name() string {
 	return "Find Installer"
 }
 
-func (s *FindInstaller) Description(state *State) string {
-	if state.InstallerPath != "" {
-		return fmt.Sprintf("Found installer: %s", filepath.Base(state.InstallerPath))
-	}
-	return "Scanning for installers"
-}
 
 func (s *FindInstaller) Execute(ctx context.Context, state *State) error {
 	state.UI.Log("Scanning for installers in: " + state.MountPoint)

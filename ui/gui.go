@@ -3,9 +3,7 @@ package ui
 import (
 	"fmt"
 	"image/color"
-	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -93,7 +91,7 @@ type GUILogger struct {
 	darkMode bool
 	filename string
 
-	logFile *os.File
+
 }
 
 // NewGUILogger creates a new graphical logger window.
@@ -169,10 +167,6 @@ func NewGUILogger(windowTitle, filename string) *GUILogger {
 
 	// Build the UI
 	g.buildUI()
-
-	// Log file
-	logPath := filepath.Join(os.TempDir(), "deck-game-installer.log")
-	g.logFile, _ = os.Create(logPath)
 
 	w.SetCloseIntercept(func() {
 		select {
@@ -260,11 +254,6 @@ func (g *GUILogger) Close() {
 }
 
 func (g *GUILogger) Log(msg string) {
-	if g.logFile != nil {
-		fmt.Fprintln(g.logFile, msg)
-		g.logFile.Sync()
-	}
-
 	// Add log to current step
 	g.mu.Lock()
 	if g.currentStep != "" {

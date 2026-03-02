@@ -23,12 +23,6 @@ func (s *MountISO) Name() string {
 	return "Mount ISO"
 }
 
-func (s *MountISO) Description(state *State) string {
-	if state.MountPoint != "" {
-		return fmt.Sprintf("ISO mounted at %s", state.MountPoint)
-	}
-	return "ISO mount"
-}
 
 func (s *MountISO) Execute(ctx context.Context, state *State) error {
 	state.UI.Log("Mounting ISO: " + state.InputPath)

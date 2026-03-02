@@ -11,9 +11,6 @@ type FinalRestart struct {
 
 func NewFinalRestart() *FinalRestart { return &FinalRestart{} }
 func (s *FinalRestart) Name() string { return "Finalize" }
-func (s *FinalRestart) Description(state *State) string {
-	return "Steam restarted with updated configuration"
-}
 
 func (s *FinalRestart) Execute(ctx context.Context, state *State) error {
 	state.UI.Log("Restarting Steam to apply shortcut changes...")

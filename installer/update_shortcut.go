@@ -21,12 +21,6 @@ func (s *UpdateShortcut) Name() string {
 	return "Update Shortcut"
 }
 
-func (s *UpdateShortcut) Description(state *State) string {
-	if state.GameName != "" {
-		return fmt.Sprintf("Shortcut updated to: %s", state.GameName)
-	}
-	return "Steam shortcut updated to game executable"
-}
 
 func (s *UpdateShortcut) Execute(ctx context.Context, state *State) error {
 	// If no game was found/selected, skip this step

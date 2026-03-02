@@ -18,9 +18,6 @@ func (s *Unmount) Name() string {
 	return "Cleanup"
 }
 
-func (s *Unmount) Description(state *State) string {
-	return "Unmounted ISO and network shares"
-}
 
 func (s *Unmount) Execute(ctx context.Context, state *State) error {
 	// Unmount ISO if we mounted it

@@ -9,31 +9,28 @@ import (
 )
 
 // State holds all shared data passed between workflow steps.
-// Each step can read from and write to this state as needed.
 type State struct {
-	// Input configuration
-	InputPath string // Original path (ISO file, SMB path, or EXE)
-	GameName  string // Name of the game (derived from filename or user input)
+	// Input
+	InputPath string // Original path (ISO, SMB, or EXE)
+	GameName  string // Derived or user-provided game name
 
 	// Mount state
-	ISOManager *iso.Manager   // ISO mount manager (nil if not mounted)
-	SMBMount   *iso.SMBMount  // SMB mount info (nil if not an SMB path)
-	MountPoint string         // Where the ISO is mounted
+	ISOManager *iso.Manager  // Non-nil if we mounted an ISO
+	SMBMount   *iso.SMBMount // Non-nil if we mounted an SMB share
+	MountPoint string        // Where the ISO is mounted
 
-	// Installer state
+	// Installer
 	InstallerPath string // Path to the installer executable
 
-	// Steam state
-	AppID int32 // Steam shortcut app ID
-	ProtonVersion       string // Selected Proton version
-	ProtonConfigChanged bool   // Whether we changed the Proton config
+	// Steam
+	AppID         int32  // Steam shortcut app ID
+	ProtonVersion string // Proton version selected for this shortcut
 
-	// Game state
-	GameExePath   string // Path to the installed game executable
-	GameStartDir  string // Start directory for the game
-	GameCandidates []string // List of candidate game executables found
+	// Installed game
+	GameExePath  string // Path to the installed game executable
+	GameStartDir string // Start directory for the game
 
-	// Dependencies (injected)
+	// Dependencies
 	UI     ui.Logger
 	Steam  *steam.Manager
 	Proton *proton.Manager

@@ -1,22 +1,16 @@
 package installer
 
-import (
-	"context"
-)
+import "context"
 
 // Step represents a single discrete operation in the installation workflow.
 type Step interface {
-	// Name returns a short identifier for the step (used for logging and progress tracking).
+	// Name returns a short identifier used for logging and progress display.
 	Name() string
 
-	// Description returns a human-readable description of what this step did.
-	Description(state *State) string
-
-	// Execute performs the step's operation.
-	// It should respect context cancellation and return early if ctx.Done() is signaled.
-	// Any data needed by later steps should be stored in state.
+	// Execute performs the step. It should respect context cancellation and
+	// store any results needed by later steps in state.
 	Execute(ctx context.Context, state *State) error
 }
 
-// BaseStep can be embedded by steps that don't need any extra behaviour.
+// BaseStep can be embedded by steps that need no extra behaviour.
 type BaseStep struct{}

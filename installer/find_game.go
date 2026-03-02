@@ -20,12 +20,6 @@ func (s *FindGame) Name() string {
 	return "Find Game"
 }
 
-func (s *FindGame) Description(state *State) string {
-	if state.GameExePath != "" {
-		return fmt.Sprintf("Found game: %s", filepath.Base(state.GameExePath))
-	}
-	return "Scanning for game executables"
-}
 
 func (s *FindGame) Execute(ctx context.Context, state *State) error {
 	state.UI.Log("Scanning Proton prefix for installed game...")
@@ -48,7 +42,6 @@ func (s *FindGame) Execute(ctx context.Context, state *State) error {
 		return fmt.Errorf("no game executables found in Proton prefix")
 	}
 
-	state.GameCandidates = executables
 	state.UI.Log(fmt.Sprintf("Found %d potential game executable(s)", len(executables)))
 
 	// Always show selection dialog - let user confirm even with one option

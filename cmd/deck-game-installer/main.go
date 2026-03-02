@@ -1,4 +1,4 @@
-// Package main provides the entry point for the deck-game-installer v2.
+// Package main provides the entry point for the deck-game-installer.
 package main
 
 import (
@@ -84,7 +84,7 @@ func runInstall(path string) {
 		}
 	}()
 
-	// Run TUI on main thread — blocks until user closes
+	// Run GUI on main thread — blocks until user closes
 	logger.Run()
 }
 
@@ -125,7 +125,7 @@ func buildPipeline(runner *installer.Runner, path string) {
 	} else if isEXE {
 		// EXE workflow: use the exe directly, skip mount/find steps
 		runner.State().InstallerPath = path
-		runner.State().GameName = deriveGameNameFromPath(path)
+		runner.State().GameName = installer.DeriveGameName(path)
 
 		runner.AddSteps(
 			installer.NewAddToSteam(),
@@ -143,33 +143,4 @@ func buildPipeline(runner *installer.Runner, path string) {
 	}
 }
 
-// deriveGameNameFromPath extracts a game name from the file path.
-func deriveGameNameFromPath(path string) string {
-	// Try to get meaningful name from directory
-	dir := filepath.Dir(path)
-	name := filepath.Base(dir)
 
-	// Clean up
-	name = strings.TrimSuffix(name, "_files")
-	name = strings.TrimSuffix(name, "-files")
-	name = strings.ReplaceAll(name, "_", " ")
-	name = strings.ReplaceAll(name, "-", " ")
-
-	// If generic, use filename
-	genericNames := map[string]bool{
-		"disc1": true, "disc2": true, "disk1": true, "disk2": true,
-		"cd1": true, "cd2": true, "dvd1": true, "dvd2": true,
-		"setup": true, "install": true, "installer": true,
-		".": true, "/": true, "home": true, "downloads": true,
-	}
-
-	if genericNames[strings.ToLower(name)] {
-		// Use filename without extension
-		name = strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
-		name = strings.ReplaceAll(name, "_", " ")
-		name = strings.ReplaceAll(name, "-", " ")
-	}
-
-	// Title case
-	return strings.Title(strings.ToLower(name))
-}

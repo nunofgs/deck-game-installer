@@ -23,13 +23,6 @@ func (s *MountSMB) Name() string {
 	return "Mount Network Share"
 }
 
-func (s *MountSMB) Description(state *State) string {
-	if state.SMBMount != nil {
-		return fmt.Sprintf("SMB share mounted at %s", state.SMBMount.MountPoint)
-	}
-	return fmt.Sprintf("SMB share //%s/%s", s.smbInfo.Server, s.smbInfo.Share)
-}
-
 func (s *MountSMB) Execute(ctx context.Context, state *State) error {
 	state.UI.Log(fmt.Sprintf("Mounting SMB share //%s/%s...", s.smbInfo.Server, s.smbInfo.Share))
 

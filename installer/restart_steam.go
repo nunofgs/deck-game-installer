@@ -11,9 +11,6 @@ type ShutdownSteam struct {
 
 func NewShutdownSteam() *ShutdownSteam { return &ShutdownSteam{} }
 func (s *ShutdownSteam) Name() string  { return "Shutdown Steam" }
-func (s *ShutdownSteam) Description(state *State) string {
-	return "Steam client shut down"
-}
 func (s *ShutdownSteam) Execute(ctx context.Context, state *State) error {
 	state.UI.Log("Shutting down Steam...")
 	if err := state.Steam.ShutdownSteam(ctx); err != nil {

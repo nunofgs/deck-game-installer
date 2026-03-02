@@ -26,9 +26,6 @@ func (s *WaitForExit) Name() string {
 	return "Run Installer"
 }
 
-func (s *WaitForExit) Description(state *State) string {
-	return "Monitored installer process"
-}
 
 func (s *WaitForExit) Execute(ctx context.Context, state *State) error {
 	state.UI.Log(">>> ACTION REQUIRED <<<")
