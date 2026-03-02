@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+	"unicode"
 )
 
 // AddToSteam creates a Steam shortcut for the installer.
@@ -34,6 +35,20 @@ func (s *AddToSteam) Execute(ctx context.Context, state *State) error {
 	return nil
 }
 
+// titleCase uppercases the first letter of each word, replacing strings.Title
+// which was deprecated in Go 1.18.
+func titleCase(s string) string {
+	words := strings.Fields(strings.ToLower(s))
+	for i, w := range words {
+		runes := []rune(w)
+		if len(runes) > 0 {
+			runes[0] = unicode.ToUpper(runes[0])
+		}
+		words[i] = string(runes)
+	}
+	return strings.Join(words, " ")
+}
+
 // DeriveGameName extracts a human-readable game name from an installer path.
 // It tries the parent directory name first, falling back to the filename.
 func DeriveGameName(path string) string {
@@ -58,7 +73,7 @@ func DeriveGameName(path string) string {
 		name = strings.ReplaceAll(name, "-", " ")
 	}
 
-	name = strings.Title(strings.ToLower(name))
+	name = titleCase(name)
 	if name == "" || name == "." || name == "/" {
 		name = strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
 	}
