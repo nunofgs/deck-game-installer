@@ -205,31 +205,4 @@ func GetNestedMap(data map[string]any, keys ...string) map[string]any {
 	return current
 }
 
-// SetNestedValue sets a value at a nested path, creating intermediate maps as needed.
-func SetNestedValue(data map[string]any, value any, keys ...string) {
-	if len(keys) == 0 {
-		return
-	}
 
-	current := data
-	for i := 0; i < len(keys)-1; i++ {
-		key := keys[i]
-		if val, ok := current[key]; ok {
-			if nested, ok := val.(map[string]any); ok {
-				current = nested
-			} else {
-				// Replace non-map value with a map
-				nested := make(map[string]any)
-				current[key] = nested
-				current = nested
-			}
-		} else {
-			// Create new nested map
-			nested := make(map[string]any)
-			current[key] = nested
-			current = nested
-		}
-	}
-
-	current[keys[len(keys)-1]] = value
-}
