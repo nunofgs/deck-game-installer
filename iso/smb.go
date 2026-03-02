@@ -65,7 +65,9 @@ func RemountSMB(ctx context.Context, info *SMBInfo) (*SMBMount, error) {
 	// Mount with elevated permissions
 	cmd := exec.CommandContext(ctx, "pkexec", "mount", "-t", "cifs", shareUNC, mnt, "-o", options)
 	if out, err := cmd.CombinedOutput(); err != nil {
-		_ = os.RemoveAll(mnt)
+		if removeErr := os.RemoveAll(mnt); removeErr != nil {
+			return nil, fmt.Errorf("%s (also failed to remove temp dir: %w)", strings.TrimSpace(string(out)), removeErr)
+		}
 		return nil, errors.New(strings.TrimSpace(string(out)))
 	}
 
@@ -117,7 +119,9 @@ func (m *SMBMount) Unmount() error {
 		return nil
 	}
 
-	_ = exec.Command("pkexec", "umount", m.MountPoint).Run()
+	if err := exec.Command("pkexec", "umount", m.MountPoint).Run(); err != nil {
+		return fmt.Errorf("failed to unmount SMB share: %w", err)
+	}
 	return os.RemoveAll(m.MountPoint)
 }
 

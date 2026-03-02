@@ -2,6 +2,7 @@ package installer
 
 import (
 	"context"
+	"fmt"
 )
 
 // FinalRestart restarts Steam one final time to recognize the updated shortcut.
@@ -16,10 +17,12 @@ func (s *FinalRestart) Execute(ctx context.Context, state *State) error {
 	state.UI.Log("Restarting Steam to apply shortcut changes...")
 
 	if err := state.Steam.ShutdownSteam(ctx); err != nil {
-		state.UI.Log("Warning: Steam shutdown had issues: " + err.Error())
+		return fmt.Errorf("failed to shut down Steam: %w", err)
 	}
 
-	state.Steam.StartSteam()
+	if err := state.Steam.StartSteam(); err != nil {
+		return fmt.Errorf("failed to start Steam: %w", err)
+	}
 
 	state.UI.Info("Installation Complete", s.completionMessage(state))
 	return nil

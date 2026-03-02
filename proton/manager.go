@@ -2,6 +2,7 @@
 package proton
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -85,10 +86,10 @@ func (m *Manager) PrefixPath(appID int32) string {
 // ScanPrefixForExecutables scans the Proton prefix for game executables,
 // filtering out common system/installer binaries. Results are sorted by
 // modification time, newest first.
-func (m *Manager) ScanPrefixForExecutables(appID int32) []string {
+func (m *Manager) ScanPrefixForExecutables(appID int32) ([]string, error) {
 	prefix := m.PrefixPath(appID)
 	if _, err := os.Stat(prefix); err != nil {
-		return nil
+		return nil, fmt.Errorf("proton prefix not found at %s: %w", prefix, err)
 	}
 
 	excludeDirs := map[string]struct{}{
@@ -126,7 +127,7 @@ func (m *Manager) ScanPrefixForExecutables(appID int32) []string {
 
 	var results []string
 
-	_ = filepath.WalkDir(prefix, func(path string, d os.DirEntry, err error) error {
+	if err := filepath.WalkDir(prefix, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
 			return nil
 		}
@@ -151,7 +152,9 @@ func (m *Manager) ScanPrefixForExecutables(appID int32) []string {
 		}
 		results = append(results, path)
 		return nil
-	})
+	}); err != nil {
+		return results, fmt.Errorf("error scanning prefix: %w", err)
+	}
 
 	sort.Slice(results, func(i, j int) bool {
 		ii, _ := os.Stat(results[i])
@@ -162,7 +165,7 @@ func (m *Manager) ScanPrefixForExecutables(appID int32) []string {
 		return ii.ModTime().After(ji.ModTime())
 	})
 
-	return results
+	return results, nil
 }
 
 // folderToInternalName converts a Proton folder name to Steam's internal name.

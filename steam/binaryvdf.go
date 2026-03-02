@@ -150,7 +150,8 @@ func newKVWriter() *kvWriter {
 
 // writeByte writes a single byte.
 func (kw *kvWriter) writeByte(b byte) {
-	_ = kw.buf.WriteByte(b)
+	// bytes.Buffer.WriteByte never returns an error.
+	kw.buf.WriteByte(b) //nolint:errcheck
 }
 
 // writeCString writes a null-terminated string.

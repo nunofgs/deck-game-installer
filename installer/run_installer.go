@@ -2,6 +2,7 @@ package installer
 
 import (
 	"context"
+	"fmt"
 
 	"deck-game-installer/steam"
 )
@@ -19,7 +20,9 @@ func (s *RunInstaller) Execute(ctx context.Context, state *State) error {
 	url := "steam://rungameid/" + urlAppID
 
 	state.UI.Log("Starting Steam with installer URL: " + url)
-	state.Steam.StartSteam(url)
+	if err := state.Steam.StartSteam(url); err != nil {
+		return fmt.Errorf("failed to start Steam: %w", err)
+	}
 	state.UI.Log("Steam launched")
 	return nil
 }

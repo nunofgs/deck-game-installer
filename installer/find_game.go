@@ -24,7 +24,10 @@ func (s *FindGame) Name() string {
 func (s *FindGame) Execute(ctx context.Context, state *State) error {
 	state.UI.Log("Scanning Proton prefix for installed game...")
 
-	executables := state.Proton.ScanPrefixForExecutables(state.AppID)
+	executables, err := state.Proton.ScanPrefixForExecutables(state.AppID)
+	if err != nil {
+		return fmt.Errorf("failed to scan for game executables: %w", err)
+	}
 
 	if len(executables) == 0 {
 		keep := state.UI.Confirm(
@@ -40,7 +43,9 @@ func (s *FindGame) Execute(ctx context.Context, state *State) error {
 			return nil
 		}
 		state.UI.Log("Removing Steam shortcut...")
-		_ = state.Steam.DeleteShortcut(state.AppID)
+		if err := state.Steam.DeleteShortcut(state.AppID); err != nil {
+			return fmt.Errorf("no game executables found; also failed to remove shortcut: %w", err)
+		}
 		return fmt.Errorf("no game executables found — shortcut removed")
 	}
 

@@ -3,6 +3,7 @@ package steam
 import (
 	"context"
 	"errors"
+	"fmt"
 	"hash/crc32"
 	"os"
 	"os/exec"
@@ -141,7 +142,9 @@ func (m *Manager) AddShortcut(appName, exePath, args, startDir string) (int32, e
 		"tags":                map[string]KVValue{},
 	}
 
-	_ = os.MkdirAll(filepath.Dir(path), 0o755)
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return 0, fmt.Errorf("failed to create shortcuts directory: %w", err)
+	}
 	data, err := WriteBinaryVDF(obj)
 	if err != nil {
 		return 0, err
@@ -317,10 +320,18 @@ func ensureNestedMap(root map[string]any, keys ...string) map[string]any {
 
 // ShutdownSteam gracefully shuts down Steam and waits for it to exit.
 func (m *Manager) ShutdownSteam(ctx context.Context) error {
-	_ = exec.CommandContext(ctx, "steam", "-shutdown").Run()
+	// steam -shutdown exit code is unreliable; ignore it and rely on pgrep.
+	exec.CommandContext(ctx, "steam", "-shutdown").Run() //nolint:errcheck
 
 	if err := m.waitForSteamShutdown(ctx); err != nil {
-		_ = exec.Command("pkill", "-x", "steam").Run()
+		// Graceful shutdown timed out — force kill.
+		if killErr := exec.Command("pkill", "-x", "steam").Run(); killErr != nil {
+			// pkill returns non-zero if no process matched, which is fine.
+			// Only return an error if Steam is genuinely still running.
+			if pgrep := exec.Command("pgrep", "-x", "steam").Run(); pgrep == nil {
+				return fmt.Errorf("failed to shut down Steam: %w", err)
+			}
+		}
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
@@ -332,16 +343,18 @@ func (m *Manager) ShutdownSteam(ctx context.Context) error {
 
 // StartSteam launches Steam in the background, detached from this process.
 // Any args (e.g. a steam:// URL) are passed directly to Steam.
-func (m *Manager) StartSteam(args ...string) {
+func (m *Manager) StartSteam(args ...string) error {
 	cmd := exec.Command("steam", args...)
 	cmd.Stdin = nil
 	cmd.Stdout = nil
 	cmd.Stderr = nil
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
-	_ = cmd.Start()
-	if cmd.Process != nil {
-		_ = cmd.Process.Release()
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("failed to start Steam: %w", err)
 	}
+	// Release detaches the process from this one; the error is not actionable.
+	cmd.Process.Release() //nolint:errcheck
+	return nil
 }
 
 // waitForSteamShutdown polls until the steam process is no longer running.

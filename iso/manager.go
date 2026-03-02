@@ -110,7 +110,9 @@ func (m *Manager) MountRoot(ctx context.Context, path string) (string, error) {
 	m.logFn("Requesting elevated permissions to mount ISO...")
 	cmd := exec.CommandContext(ctx, "pkexec", "mount", "-o", options, path, tmp)
 	if out, err := cmd.CombinedOutput(); err != nil {
-		_ = os.RemoveAll(tmp)
+		if removeErr := os.RemoveAll(tmp); removeErr != nil {
+			m.logFn("Warning: failed to remove temp mount dir: " + removeErr.Error())
+		}
 		return "", errors.New(strings.TrimSpace(string(out)))
 	}
 
@@ -133,18 +135,26 @@ func (m *Manager) Unmount() {
 	}
 
 	if m.isRoot && m.mountPoint != "" {
-		_ = exec.Command("pkexec", "umount", m.mountPoint).Run()
-		_ = os.RemoveAll(m.mountPoint)
+		if err := exec.Command("pkexec", "umount", m.mountPoint).Run(); err != nil {
+			m.logFn("Warning: failed to unmount ISO: " + err.Error())
+		}
+		if err := os.RemoveAll(m.mountPoint); err != nil {
+			m.logFn("Warning: failed to remove mount dir: " + err.Error())
+		}
 		m.mountPoint = ""
 		m.isRoot = false
 		return
 	}
 
 	if m.mountPoint != "" && m.loopDevice != "" {
-		_ = exec.Command("udisksctl", "unmount", "-b", m.loopDevice).Run()
+		if err := exec.Command("udisksctl", "unmount", "-b", m.loopDevice).Run(); err != nil {
+			m.logFn("Warning: failed to unmount loop device: " + err.Error())
+		}
 	}
 	if m.loopDevice != "" {
-		_ = exec.Command("udisksctl", "loop-delete", "-b", m.loopDevice).Run()
+		if err := exec.Command("udisksctl", "loop-delete", "-b", m.loopDevice).Run(); err != nil {
+			m.logFn("Warning: failed to delete loop device: " + err.Error())
+		}
 	}
 
 	m.mountPoint = ""
