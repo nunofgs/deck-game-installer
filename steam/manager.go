@@ -490,12 +490,10 @@ func ensureNestedMap(root map[string]any, keys ...string) map[string]any {
 	return current
 }
 
-// RestartSteam gracefully shuts down and restarts Steam.
-func (m *Manager) RestartSteam(ctx context.Context) error {
-	// Request graceful shutdown
+// ShutdownSteam gracefully shuts down Steam and waits for it to exit.
+func (m *Manager) ShutdownSteam(ctx context.Context) error {
 	_ = exec.CommandContext(ctx, "steam", "-shutdown").Run()
 
-	// Wait for Steam to shut down
 	if err := m.waitForSteamShutdown(ctx); err != nil {
 		// Fall back to force kill
 		_ = exec.Command("pkill", "-x", "steam").Run()
@@ -507,22 +505,20 @@ func (m *Manager) RestartSteam(ctx context.Context) error {
 		}
 	}
 
-	// Start Steam in background, fully detached
+	return nil
+}
+
+// StartSteam launches Steam in the background, detached from this process.
+func (m *Manager) StartSteam() {
 	cmd := exec.Command("steam")
 	cmd.Stdin = nil
 	cmd.Stdout = nil
 	cmd.Stderr = nil
-	cmd.SysProcAttr = &syscall.SysProcAttr{
-		Setsid: true, // Create new session to detach from parent
-	}
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 	_ = cmd.Start()
-
-	// Release the process so it's not tied to this parent
 	if cmd.Process != nil {
 		_ = cmd.Process.Release()
 	}
-
-	return nil
 }
 
 // waitForSteamShutdown monitors Steam's log to detect when it has shut down.

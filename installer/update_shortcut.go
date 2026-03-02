@@ -55,9 +55,6 @@ func (s *UpdateShortcut) Execute(ctx context.Context, state *State) error {
 	state.UI.Log(fmt.Sprintf("Shortcut updated: %s", gameName))
 	state.UI.Log(fmt.Sprintf("Game path: %s", filepath.Base(state.GameExePath)))
 
-	// Mark that Steam needs restart to pick up changes
-	state.SteamRestartRequired = true
-
 	return nil
 }
 

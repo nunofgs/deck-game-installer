@@ -113,8 +113,9 @@ func buildPipeline(runner *installer.Runner, path string) {
 			installer.NewMountISO(),
 			installer.NewFindInstaller(),
 			installer.NewAddToSteam(),
+			installer.NewShutdownSteam(),
 			installer.NewConfigureProton(),
-			installer.NewRestartSteam(),
+			installer.NewStartSteam(),
 			installer.NewRunInstaller(),
 			installer.NewWaitForExit(),
 			installer.NewFindGame(),
@@ -129,8 +130,9 @@ func buildPipeline(runner *installer.Runner, path string) {
 
 		runner.AddSteps(
 			installer.NewAddToSteam(),
+			installer.NewShutdownSteam(),
 			installer.NewConfigureProton(),
-			installer.NewRestartSteam(),
+			installer.NewStartSteam(),
 			installer.NewRunInstaller(),
 			installer.NewWaitForExit(),
 			installer.NewFindGame(),

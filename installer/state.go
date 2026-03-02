@@ -27,9 +27,8 @@ type State struct {
 	AppID                int32  // Steam shortcut app ID
 	OriginalShortcutExe  string // Original exe path (for rollback after update)
 	OriginalShortcutDir  string // Original start dir (for rollback after update)
-	ProtonVersion        string // Selected Proton version
-	ProtonConfigChanged  bool   // Whether we changed the Proton config
-	SteamRestartRequired bool   // Whether Steam needs to be restarted
+	ProtonVersion       string // Selected Proton version
+	ProtonConfigChanged bool   // Whether we changed the Proton config
 
 	// Game state
 	GameExePath   string // Path to the installed game executable

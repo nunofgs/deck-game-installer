@@ -60,7 +60,6 @@ func (s *ConfigureProton) Execute(ctx context.Context, state *State) error {
 
 	       state.ProtonVersion = protonVersion
 	       state.ProtonConfigChanged = true
-	       state.SteamRestartRequired = true
 
 	       state.UI.Log("Proton configuration updated")
 	       return nil

@@ -2,50 +2,42 @@ package installer
 
 import (
 	"context"
-
 )
 
-// RestartSteam restarts the Steam client to apply configuration changes.
-type RestartSteam struct {
+// ShutdownSteam shuts down the Steam client.
+type ShutdownSteam struct {
 	BaseStep
 }
 
-// NewRestartSteam creates a new restart Steam step.
-func NewRestartSteam() *RestartSteam {
-	return &RestartSteam{}
+func NewShutdownSteam() *ShutdownSteam { return &ShutdownSteam{} }
+func (s *ShutdownSteam) Name() string  { return "Shutdown Steam" }
+func (s *ShutdownSteam) Description(state *State) string {
+	return "Steam client shut down"
 }
-
-func (s *RestartSteam) Name() string {
-	return "Restart Steam"
-}
-
-func (s *RestartSteam) Description(state *State) string {
-	return "Steam client restarted"
-}
-
-func (s *RestartSteam) Execute(ctx context.Context, state *State) error {
-	if !state.SteamRestartRequired {
-		state.UI.Log("Steam restart not required, skipping...")
-		return nil
+func (s *ShutdownSteam) Execute(ctx context.Context, state *State) error {
+	state.UI.Log("Shutting down Steam...")
+	if err := state.Steam.ShutdownSteam(ctx); err != nil {
+		state.UI.Log("Warning: Steam shutdown had issues, continuing...")
 	}
-
-	state.UI.Log("Restarting Steam to apply configuration changes...")
-
-	if err := state.Steam.RestartSteam(ctx); err != nil {
-		state.UI.Log("Warning: Steam restart had issues, but continuing...")
-		// Don't fail the whole workflow for restart issues
-	}
-
-	state.SteamRestartRequired = false
-	state.UI.Log("Steam restarted successfully")
-
-	// Give Steam a moment to fully initialize
-	state.UI.Log("Waiting for Steam to initialize...")
-
+	state.UI.Log("Steam shut down")
 	return nil
 }
 
-// CanRollback returns false - can't undo a Steam restart.
-func (s *RestartSteam) CanRollback() bool {
-	return false
+// StartSteam launches the Steam client.
+type StartSteam struct {
+	BaseStep
+}
+
+func NewStartSteam() *StartSteam { return &StartSteam{} }
+func (s *StartSteam) Name() string {
+	return "Start Steam"
+}
+func (s *StartSteam) Description(state *State) string {
+	return "Steam client started"
+}
+func (s *StartSteam) Execute(ctx context.Context, state *State) error {
+	state.UI.Log("Starting Steam...")
+	state.Steam.StartSteam()
+	state.UI.Log("Steam started")
+	return nil
 }
