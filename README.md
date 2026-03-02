@@ -2,6 +2,14 @@
 
 Installs Windows games on Steam Deck via Proton. Point it at an ISO or installer EXE and it handles the rest — mounting, Steam shortcut creation, Proton setup, and finding the game executable when the installer finishes.
 
+---
+
+😩 You know the drill. Add shortcut to Steam, set compatibility to Proton, boot into desktop mode, run the installer, figure out where it installed to, update the shortcut path, set the launch options... it's a lot for what should be a simple thing.
+
+🎮 This tool does all of that for you. Right-click an ISO or EXE, hit install, and by the end you've got a working game in your Steam library.
+
+---
+
 ## Installation
 
 ```bash
@@ -10,7 +18,7 @@ curl -fsSL https://github.com/nunofgs/deck-game-installer/releases/latest/downlo
 
 ## Usage
 
-### In KDE (recommended)
+### In Desktop
 
 Right-click any ISO or EXE in Dolphin and choose **Install with Steam**.
 
