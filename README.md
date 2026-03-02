@@ -5,6 +5,7 @@
 This tool cuts all of that down to a right-click. Point it at an ISO or EXE — local, or straight from a network share — and it handles mounting, Proton setup, running the installer, finding the game, and updating the shortcut automatically.
 
 **Right-click → Install with Steam → Play.**
+
 ---
 
 ## Installation
