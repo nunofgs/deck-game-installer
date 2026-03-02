@@ -152,6 +152,38 @@ func (m *Manager) AddShortcut(appName, exePath, args, startDir string) (int32, e
 	return appid, nil
 }
 
+// DeleteShortcut removes a shortcut by app ID.
+func (m *Manager) DeleteShortcut(appID int32) error {
+	path := m.ShortcutsPath()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	obj, err := ReadBinaryVDF(data)
+	if err != nil {
+		return err
+	}
+	shortcuts, ok := obj["shortcuts"].(map[string]KVValue)
+	if !ok {
+		return errors.New("shortcuts not found")
+	}
+	for k, v := range shortcuts {
+		entry, ok := v.(map[string]KVValue)
+		if !ok {
+			continue
+		}
+		if id, ok := entry["appid"].(int32); ok && id == appID {
+			delete(shortcuts, k)
+			newData, err := WriteBinaryVDF(obj)
+			if err != nil {
+				return err
+			}
+			return os.WriteFile(path, newData, 0o644)
+		}
+	}
+	return errors.New("shortcut not found")
+}
+
 // UpdateShortcut modifies an existing shortcut's exe, start directory, and name.
 func (m *Manager) UpdateShortcut(appID int32, newExePath, newStartDir, newAppName string) error {
 	path := m.ShortcutsPath()

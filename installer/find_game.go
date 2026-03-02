@@ -27,19 +27,21 @@ func (s *FindGame) Execute(ctx context.Context, state *State) error {
 	executables := state.Proton.ScanPrefixForExecutables(state.AppID)
 
 	if len(executables) == 0 {
-		// Let user manually specify or continue without
-		if state.UI.Confirm(
+		keep := state.UI.Confirm(
 			"No Game Found",
 			"Could not find any game executables in the Proton prefix.\n\n"+
 				"This might happen if:\n"+
 				"• The installer didn't complete successfully\n"+
 				"• The game installed to a non-standard location\n\n"+
-				"Would you like to keep the shortcut as-is and configure it manually later?",
-		) {
-			state.UI.Log("Keeping original shortcut configuration")
+				"Keep the Steam shortcut so you can configure it manually later?",
+		)
+		if keep {
+			state.UI.Log("Keeping shortcut for manual configuration")
 			return nil
 		}
-		return fmt.Errorf("no game executables found in Proton prefix")
+		state.UI.Log("Removing Steam shortcut...")
+		_ = state.Steam.DeleteShortcut(state.AppID)
+		return fmt.Errorf("no game executables found — shortcut removed")
 	}
 
 	state.UI.Log(fmt.Sprintf("Found %d potential game executable(s)", len(executables)))
