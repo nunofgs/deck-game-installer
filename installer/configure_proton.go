@@ -40,4 +40,3 @@ func (s *ConfigureProton) Execute(ctx context.Context, state *State) error {
 	return nil
 }
 
-

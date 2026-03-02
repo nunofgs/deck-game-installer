@@ -39,6 +39,6 @@ func (s *MountSMB) Execute(ctx context.Context, state *State) error {
 		state.UI.Log("Mounted SMB share at: " + mount.MountPoint)
 	}
 
-	state.UI.Log("ISO path updated to: " + state.InputPath)
+	state.UI.Log("Local path: " + state.InputPath)
 	return nil
 }

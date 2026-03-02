@@ -12,6 +12,11 @@ import (
 	"strings"
 )
 
+var (
+	reLoopDevice = regexp.MustCompile(`as (/dev/loop\d+)\.`)
+	reMountPoint = regexp.MustCompile(`at (/\S+)`)
+)
+
 // Manager handles ISO mounting and unmounting operations.
 type Manager struct {
 	loopDevice  string
@@ -67,7 +72,7 @@ func (m *Manager) Mount(ctx context.Context, path string) (string, error) {
 		return "", errors.New(strings.TrimSpace(string(setupOut)))
 	}
 
-	loopMatch := regexp.MustCompile(`as (/dev/loop\d+)\.`).FindStringSubmatch(string(setupOut))
+	loopMatch := reLoopDevice.FindStringSubmatch(string(setupOut))
 	if len(loopMatch) < 2 {
 		return "", errors.New("failed to parse loop device from: " + string(setupOut))
 	}
@@ -82,7 +87,7 @@ func (m *Manager) Mount(ctx context.Context, path string) (string, error) {
 		return "", errors.New(strings.TrimSpace(string(mountOut)))
 	}
 
-	mpMatch := regexp.MustCompile(`at (/\S+)`).FindStringSubmatch(string(mountOut))
+	mpMatch := reMountPoint.FindStringSubmatch(string(mountOut))
 	if len(mpMatch) < 2 {
 		return "", errors.New("failed to parse mount point from: " + string(mountOut))
 	}
@@ -219,7 +224,7 @@ func findExistingMount(path string) (*existingMount, error) {
 	mountCmd := exec.Command("udisksctl", "mount", "-b", loop)
 	mountOut, err := mountCmd.CombinedOutput()
 	if err == nil {
-		mpMatch := regexp.MustCompile(`at (/\S+)`).FindStringSubmatch(string(mountOut))
+		mpMatch := reMountPoint.FindStringSubmatch(string(mountOut))
 		if len(mpMatch) >= 2 {
 			return &existingMount{loopDevice: loop, mountPoint: strings.TrimRight(mpMatch[1], ".")}, nil
 		}

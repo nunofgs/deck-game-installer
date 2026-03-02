@@ -82,8 +82,6 @@ type GUILogger struct {
 	// Channels
 	cancelCh  chan struct{}
 	proceedCh chan struct{}
-	doneCh    chan struct{}
-	closeOnce sync.Once
 
 	// Theme
 	darkMode bool
@@ -99,7 +97,6 @@ func NewGUILogger(windowTitle, filename string) *GUILogger {
 
 	cancelCh := make(chan struct{}, 1)
 	proceedCh := make(chan struct{}, 1)
-	doneCh := make(chan struct{})
 
 	g := &GUILogger{
 		app:          a,
@@ -107,10 +104,9 @@ func NewGUILogger(windowTitle, filename string) *GUILogger {
 		stepStatuses: make(map[string]*StepStatus),
 		stepOrder:    nil,
 		darkMode:     false,
-		cancelCh:     cancelCh,
-		proceedCh:    proceedCh,
-		doneCh:       doneCh,
-		filename:     filename,
+		cancelCh:  cancelCh,
+		proceedCh: proceedCh,
+		filename:  filename,
 	}
 
 	// Create buttons
@@ -126,13 +122,13 @@ func NewGUILogger(windowTitle, filename string) *GUILogger {
 		a.Quit()
 	})
 
-			       g.proceedBtn = widget.NewButton("I finished the installation. Please proceed.", func() {
-				       select {
-				       case proceedCh <- struct{}{}:
-				       default:
-				       }
-			       })
-			       g.proceedBtn.Disable()
+	g.proceedBtn = widget.NewButton("I finished the installation. Please proceed.", func() {
+		select {
+		case proceedCh <- struct{}{}:
+		default:
+		}
+	})
+	g.proceedBtn.Disable()
 
 		g.openSteamBtn = widget.NewButton("Open in Steam", func() {
 			exec.Command("xdg-open", "steam://open/library").Start()
@@ -231,15 +227,6 @@ func (g *GUILogger) raiseWindow() {
 func (g *GUILogger) Run() {
 	g.window.Show()
 	g.app.Run()
-	close(g.doneCh)
-}
-
-func (g *GUILogger) WaitForClose() {
-	<-g.doneCh
-}
-
-func (g *GUILogger) Close() {
-	g.closeOnce.Do(func() { g.app.Quit() })
 }
 
 func (g *GUILogger) Log(msg string) {
@@ -571,23 +558,22 @@ func (g *GUILogger) Select(title, prompt string, opts []string) (string, bool) {
 }
 
 func (g *GUILogger) WaitWithManualOverride() <-chan struct{} {
-	       g.runOnUI(func() {
-		       g.statusLabel.SetText("Waiting for installer to finish...")
-		       g.bottomBox.Objects = []fyne.CanvasObject{
-			       container.NewCenter(container.NewHBox(g.proceedBtn)),
-		       }
-		       g.bottomBox.Refresh()
-		       // Start countdown when button becomes visible
-		       g.proceedBtn.Disable()
-		       go func(btn *widget.Button) {
-			       for i := 10; i > 0; i-- {
-				       btn.SetText(fmt.Sprintf("I finished the installation. Please proceed. (%ds)", i))
-				       time.Sleep(time.Second)
-			       }
-			       btn.SetText("I finished the installation. Please proceed.")
-			       btn.Enable()
-		       }(g.proceedBtn)
-	       })
+	g.runOnUI(func() {
+		g.statusLabel.SetText("Waiting for installer to finish...")
+		g.bottomBox.Objects = []fyne.CanvasObject{
+			container.NewCenter(container.NewHBox(g.proceedBtn)),
+		}
+		g.bottomBox.Refresh()
+		g.proceedBtn.Disable()
+		go func(btn *widget.Button) {
+			for i := 10; i > 0; i-- {
+				btn.SetText(fmt.Sprintf("I finished the installation. Please proceed. (%ds)", i))
+				time.Sleep(time.Second)
+			}
+			btn.SetText("I finished the installation. Please proceed.")
+			btn.Enable()
+		}(g.proceedBtn)
+	})
 	return g.proceedCh
 }
 

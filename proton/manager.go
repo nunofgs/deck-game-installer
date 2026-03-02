@@ -266,13 +266,15 @@ func dedupeByRealPath(paths []string) []string {
 	return out
 }
 
+var reProtonVersion = regexp.MustCompile(`proton\s*(\d+)`)
+
 // folderToInternalName converts a Proton folder name to Steam's internal name.
 func folderToInternalName(name string) string {
 	lower := strings.ToLower(name)
 	if strings.Contains(lower, "experimental") {
 		return "proton-experimental"
 	}
-	if m := regexp.MustCompile(`proton\s*(\d+)`).FindStringSubmatch(lower); len(m) > 1 {
+	if m := reProtonVersion.FindStringSubmatch(lower); len(m) > 1 {
 		return "proton_" + m[1]
 	}
 	return strings.ReplaceAll(strings.ReplaceAll(lower, " - ", "-"), " ", "_")

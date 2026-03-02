@@ -188,7 +188,7 @@ func (m *Manager) DeleteShortcut(appID int32) error {
 }
 
 // UpdateShortcut modifies an existing shortcut's exe, start directory, and name.
-func (m *Manager) UpdateShortcut(appID int32, newExePath, newStartDir, newAppName string) error {
+func (m *Manager) UpdateShortcut(appID int32, newExePath, newAppName string) error {
 	path := m.ShortcutsPath()
 
 	data, err := os.ReadFile(path)
@@ -215,10 +215,7 @@ func (m *Manager) UpdateShortcut(appID int32, newExePath, newStartDir, newAppNam
 		}
 
 		entry["Exe"] = "\"" + newExePath + "\""
-		if newStartDir == "" {
-			newStartDir = filepath.Dir(newExePath)
-		}
-		entry["StartDir"] = newStartDir
+		entry["StartDir"] = filepath.Dir(newExePath)
 		if newAppName != "" {
 			entry["AppName"] = newAppName
 		} else if name, ok := entry["AppName"].(string); ok {

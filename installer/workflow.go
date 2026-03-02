@@ -38,6 +38,7 @@ func (r *Runner) Run(ctx context.Context) error {
 	for _, step := range r.steps {
 		select {
 		case <-ctx.Done():
+			r.cleanup()
 			return ctx.Err()
 		default:
 		}
