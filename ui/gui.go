@@ -229,6 +229,18 @@ func (g *GUILogger) runOnUI(fn func()) {
 	fn()
 }
 
+// raiseWindow brings the window to the foreground.
+// RequestFocus alone only causes a taskbar glow on KDE/Wayland; xdotool and
+// wmctrl can actually activate the XWayland window.
+func (g *GUILogger) raiseWindow() {
+	g.window.RequestFocus()
+	title := g.window.Title()
+	if exec.Command("xdotool", "search", "--name", title, "windowactivate", "--sync").Run() == nil {
+		return
+	}
+	exec.Command("wmctrl", "-a", title).Run() //nolint:errcheck
+}
+
 func (g *GUILogger) Run() {
 	g.window.Show()
 	g.app.Run()
@@ -516,7 +528,7 @@ func (g *GUILogger) getStatusColor(status StepStatusType) color.Color {
 func (g *GUILogger) Confirm(title, msg string) bool {
 	ch := make(chan bool, 1)
 	g.runOnUI(func() {
-		g.window.RequestFocus()
+		g.raiseWindow()
 		dialog.NewConfirm(title, msg, func(ok bool) { ch <- ok }, g.window).Show()
 	})
 	return <-ch
@@ -564,7 +576,7 @@ func (g *GUILogger) Select(title, prompt string, opts []string) (string, bool) {
 	}
 
 	g.runOnUI(func() {
-		g.window.RequestFocus()
+		g.raiseWindow()
 		d := dialog.NewCustomConfirm(title, "OK", "Cancel",
 			container.NewBorder(widget.NewLabel(p), nil, nil, nil, container.NewVScroll(list)),
 			func(ok bool) {
