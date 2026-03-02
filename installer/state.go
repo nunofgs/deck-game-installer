@@ -4,6 +4,7 @@ package installer
 import (
 	"deck-game-installer/iso"
 	"deck-game-installer/proton"
+	"deck-game-installer/smb"
 	"deck-game-installer/steam"
 	"deck-game-installer/ui"
 )
@@ -16,7 +17,7 @@ type State struct {
 
 	// Mount state
 	ISOManager *iso.Manager  // Non-nil if we mounted an ISO
-	SMBMount   *iso.SMBMount // Non-nil if we mounted an SMB share
+	SMBMount   *smb.SMBMount // Non-nil if we mounted an SMB share
 	MountPoint string        // Where the ISO is mounted
 
 	// Installer

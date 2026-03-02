@@ -11,8 +11,8 @@ import (
 	"syscall"
 
 	"deck-game-installer/installer"
-	"deck-game-installer/iso"
 	"deck-game-installer/proton"
+	"deck-game-installer/smb"
 	"deck-game-installer/steam"
 	"deck-game-installer/ui"
 )
@@ -91,13 +91,13 @@ func runInstall(path string) {
 // buildPipeline adds the appropriate steps based on the input path type.
 func buildPipeline(runner *installer.Runner, path string) {
 	// Check if it's an SMB path
-	smbInfo := iso.ParseSMBPath(path)
+	smbInfo := smb.ParseSMBPath(path)
 	isISO := strings.HasSuffix(strings.ToLower(path), ".iso")
 	isEXE := strings.HasSuffix(strings.ToLower(path), ".exe")
 
 	if smbInfo != nil {
 		// SMB path - need to mount the share first
-		runner.AddStep(installer.NewMountSMB(smbInfo))
+		runner.AddSteps(installer.NewMountSMB(smbInfo))
 
 		// After SMB mount, the path becomes local
 		if strings.HasSuffix(strings.ToLower(smbInfo.RelPath), ".iso") {
