@@ -11,6 +11,11 @@ import (
 	"strings"
 )
 
+var (
+	reSMBURI = regexp.MustCompile(`^smb://([^/]+)/([^/]+)/?(.*)`)
+	reSMBKIO = regexp.MustCompile(`/smb/([^/]+)/([^/]+)/?(.*)`)
+)
+
 // SMBInfo holds parsed information about an SMB path.
 type SMBInfo struct {
 	Server  string // SMB server hostname
@@ -27,14 +32,10 @@ type SMBMount struct {
 // ParseSMBPath extracts SMB info from either a standard smb:// URI or a KDE
 // KIO path (/smb/server/share/...). Returns nil if the path is neither.
 func ParseSMBPath(path string) *SMBInfo {
-	// Standard URI: smb://server/share/rel/path
-	if re := regexp.MustCompile(`^smb://([^/]+)/([^/]+)/?(.*)`); true {
-		if m := re.FindStringSubmatch(path); len(m) == 4 {
-			return &SMBInfo{Server: m[1], Share: m[2], RelPath: m[3]}
-		}
+	if m := reSMBURI.FindStringSubmatch(path); len(m) == 4 {
+		return &SMBInfo{Server: m[1], Share: m[2], RelPath: m[3]}
 	}
-	// KDE KIO path: /run/user/.../smb/server/share/rel/path or /smb/server/share/rel/path
-	if m := regexp.MustCompile(`/smb/([^/]+)/([^/]+)/?(.*)`).FindStringSubmatch(path); len(m) == 4 {
+	if m := reSMBKIO.FindStringSubmatch(path); len(m) == 4 {
 		return &SMBInfo{Server: m[1], Share: m[2], RelPath: m[3]}
 	}
 	return nil
@@ -131,10 +132,4 @@ func (m *SMBMount) WasExisting() bool {
 	return m != nil && m.wasExisting
 }
 
-// GetFullPath returns the full local path to the file within the SMB share.
-func (m *SMBMount) GetFullPath(info *SMBInfo) string {
-	if m == nil || m.MountPoint == "" {
-		return ""
-	}
-	return filepath.Join(m.MountPoint, info.RelPath)
-}
+
