@@ -5,6 +5,7 @@ import (
 	"image/color"
 	"os"
 	"os/exec"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -91,11 +92,13 @@ type GUILogger struct {
 
 // NewGUILogger creates a new graphical logger window.
 func NewGUILogger(windowTitle, filename string) *GUILogger {
-	// The Steam Deck's ~216 DPI causes Fyne to scale at ~2.25×, making our window
-	// larger than the 800px screen height. Cap scaling to 1.0 on Steam Deck unless
-	// the user has already set FYNE_SCALE themselves.
-	if os.Getenv("SteamDeck") == "1" && os.Getenv("FYNE_SCALE") == "" {
-		os.Setenv("FYNE_SCALE", "1")
+	// Fyne auto-detects scale from DPI, which can result in a window too large
+	// to fit on screen (e.g. high-DPI small displays). If the user hasn't set
+	// FYNE_SCALE, compute a scale that keeps the window within the screen height.
+	if os.Getenv("FYNE_SCALE") == "" {
+		if scale := safeUIScale(600); scale != "" {
+			os.Setenv("FYNE_SCALE", scale)
+		}
 	}
 
 	a := fyneapp.New()
@@ -737,6 +740,49 @@ func (r *tappableContainerRenderer) Objects() []fyne.CanvasObject {
 }
 
 func (r *tappableContainerRenderer) Destroy() {}
+
+// reMonitor matches the primary connected monitor line from xrandr, e.g.:
+//
+//	eDP connected primary 1280x800+0+0 right (...) 100mm x 160mm
+var reMonitor = regexp.MustCompile(`connected primary (\d+)x(\d+)\S*\s.*?(\d+)mm x (\d+)mm`)
+
+// safeUIScale returns a FYNE_SCALE multiplier that keeps a window of
+// windowHeight Fyne units within 85% of the screen height, or "" if no
+// adjustment is needed.
+//
+// Fyne's internal scale formula (glfw/scale.go):
+//
+//	detectedScale = (widthPx / (widthMm / 25.4)) / 120
+//	finalScale    = detectedScale * FYNE_SCALE
+func safeUIScale(windowHeight float64) string {
+	out, err := exec.Command("xrandr", "--current").Output()
+	if err != nil {
+		return ""
+	}
+
+	m := reMonitor.FindStringSubmatch(string(out))
+	if m == nil {
+		return ""
+	}
+
+	var widthPx, screenH, widthMm float64
+	fmt.Sscanf(m[1], "%f", &widthPx)
+	fmt.Sscanf(m[2], "%f", &screenH)
+	fmt.Sscanf(m[3], "%f", &widthMm)
+
+	const baselineDPI = 120.0
+	detectedScale := (widthPx / (widthMm / 25.4)) / baselineDPI
+	if detectedScale < 1.0 {
+		detectedScale = 1.0
+	}
+
+	desiredScale := (screenH * 0.85) / windowHeight
+	if detectedScale <= desiredScale {
+		return ""
+	}
+
+	return fmt.Sprintf("%.2f", desiredScale/detectedScale)
+}
 
 // Utility functions
 func findCommonPrefix(s []string) string {
