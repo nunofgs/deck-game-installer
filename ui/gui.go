@@ -3,6 +3,7 @@ package ui
 import (
 	"fmt"
 	"image/color"
+	"os"
 	"os/exec"
 	"strings"
 	"sync"
@@ -90,6 +91,13 @@ type GUILogger struct {
 
 // NewGUILogger creates a new graphical logger window.
 func NewGUILogger(windowTitle, filename string) *GUILogger {
+	// The Steam Deck's ~216 DPI causes Fyne to scale at ~2.25×, making our window
+	// larger than the 800px screen height. Cap scaling to 1.0 on Steam Deck unless
+	// the user has already set FYNE_SCALE themselves.
+	if os.Getenv("SteamDeck") == "1" && os.Getenv("FYNE_SCALE") == "" {
+		os.Setenv("FYNE_SCALE", "1")
+	}
+
 	a := fyneapp.New()
 	a.Settings().SetTheme(theme.LightTheme())
 	w := a.NewWindow(windowTitle)
