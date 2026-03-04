@@ -20,7 +20,7 @@ curl -fsSL https://github.com/nunofgs/deck-game-installer/releases/latest/downlo
 2. Extract it and run:
 
 ```bash
-unzip deck-game-installer.zip
+unzip deck-game-installer.zip -d deck-game-installer
 cd deck-game-installer
 ./install.sh
 ```

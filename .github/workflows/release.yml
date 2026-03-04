@@ -33,10 +33,12 @@ jobs:
       - name: Build
         run: go build -trimpath -ldflags="-s -w" -o deck-game-installer ./cmd/deck-game-installer
 
+      - name: Package zip
+        run: zip deck-game-installer.zip deck-game-installer install-with-steam.desktop install.sh
+
       - name: Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            deck-game-installer
-            install-with-steam.desktop
+            deck-game-installer.zip
             install.sh
