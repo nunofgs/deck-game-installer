@@ -244,26 +244,42 @@ func nextShortcutIndex(shortcuts map[string]KVValue) int {
 
 // GetProtonVersion returns the configured Proton version for an app ID.
 func (m *Manager) GetProtonVersion(appID int32) (string, error) {
-	data, err := os.ReadFile(m.ConfigPath())
+	configPath := m.ConfigPath()
+	fmt.Printf("[GetProtonVersion] Reading config.vdf from: %s\n", configPath)
+
+	data, err := os.ReadFile(configPath)
 	if err != nil {
+		fmt.Printf("[GetProtonVersion] ERROR reading config.vdf: %v\n", err)
 		return "", err
 	}
+	fmt.Printf("[GetProtonVersion] config.vdf read OK (%d bytes)\n", len(data))
+
 	root, err := vdf.Parse(string(data))
 	if err != nil {
+		fmt.Printf("[GetProtonVersion] ERROR parsing config.vdf: %v\n", err)
 		return "", err
 	}
+	fmt.Printf("[GetProtonVersion] config.vdf parsed OK, top-level keys: %v\n", mapKeys(root))
 
 	mapping := vdf.GetNestedMap(root, "InstallConfigStore", "Software", "Valve", "Steam", "CompatToolMapping")
 	if mapping == nil {
+		fmt.Printf("[GetProtonVersion] CompatToolMapping not found in config.vdf\n")
 		return "", errors.New("CompatToolMapping not found")
 	}
+	fmt.Printf("[GetProtonVersion] CompatToolMapping found, keys: %v\n", mapKeys(mapping))
 
 	key := strconv.FormatUint(uint64(uint32(appID)), 10)
+	fmt.Printf("[GetProtonVersion] Looking up app key: %q (appID int32=%d, uint32=%d)\n", key, appID, uint32(appID))
+
 	entry, ok := mapping[key].(map[string]any)
 	if !ok {
+		fmt.Printf("[GetProtonVersion] No entry found for key %q in CompatToolMapping\n", key)
 		return "", errors.New("app entry not found")
 	}
+	fmt.Printf("[GetProtonVersion] Entry found for key %q: %v\n", key, entry)
+
 	name, _ := entry["name"].(string)
+	fmt.Printf("[GetProtonVersion] Entry 'name' field: %q\n", name)
 	if name == "" {
 		return "", errors.New("Proton version not set")
 	}
@@ -272,24 +288,56 @@ func (m *Manager) GetProtonVersion(appID int32) (string, error) {
 
 // SetProtonVersion configures the Proton version for an app ID in config.vdf.
 func (m *Manager) SetProtonVersion(appID int32, protonVersion string) error {
-	data, err := os.ReadFile(m.ConfigPath())
+	configPath := m.ConfigPath()
+	fmt.Printf("[SetProtonVersion] appID int32=%d uint32=%d protonVersion=%q\n", appID, uint32(appID), protonVersion)
+	fmt.Printf("[SetProtonVersion] Reading config.vdf from: %s\n", configPath)
+
+	data, err := os.ReadFile(configPath)
 	if err != nil {
+		fmt.Printf("[SetProtonVersion] ERROR reading config.vdf: %v\n", err)
 		return err
 	}
+	fmt.Printf("[SetProtonVersion] config.vdf read OK (%d bytes)\n", len(data))
+
 	root, err := vdf.Parse(string(data))
 	if err != nil {
+		fmt.Printf("[SetProtonVersion] ERROR parsing config.vdf: %v\n", err)
 		return err
 	}
+	fmt.Printf("[SetProtonVersion] config.vdf parsed OK\n")
 
 	mapping := ensureNestedMap(root, "InstallConfigStore", "Software", "Valve", "Steam", "CompatToolMapping")
+	fmt.Printf("[SetProtonVersion] CompatToolMapping keys before update: %v\n", mapKeys(mapping))
+
 	key := strconv.FormatUint(uint64(uint32(appID)), 10)
+	fmt.Printf("[SetProtonVersion] Writing entry for key %q: name=%q config=\"\" priority=\"250\"\n", key, protonVersion)
+
 	mapping[key] = map[string]any{
 		"name":     protonVersion,
 		"config":   "",
 		"priority": "250",
 	}
+	fmt.Printf("[SetProtonVersion] CompatToolMapping keys after update: %v\n", mapKeys(mapping))
 
-	return os.WriteFile(m.ConfigPath(), []byte(vdf.Dump(root)), 0o644)
+	dumped := vdf.Dump(root)
+	fmt.Printf("[SetProtonVersion] Dumped VDF size: %d bytes\n", len(dumped))
+	fmt.Printf("[SetProtonVersion] Writing to: %s\n", configPath)
+
+	if err := os.WriteFile(configPath, []byte(dumped), 0o644); err != nil {
+		fmt.Printf("[SetProtonVersion] ERROR writing config.vdf: %v\n", err)
+		return err
+	}
+	fmt.Printf("[SetProtonVersion] config.vdf written successfully\n")
+	return nil
+}
+
+// mapKeys returns a sorted slice of keys from a map[string]any, for debug logging.
+func mapKeys(m map[string]any) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	return keys
 }
 
 // ensureNestedMap traverses or creates nested maps along a key path.
