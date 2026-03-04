@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 )
 
 var (
@@ -96,6 +97,10 @@ func (m *Manager) Mount(ctx context.Context, path string) (string, error) {
 	m.isRoot = false
 	m.wasExisting = false
 	m.logFn("Successfully mounted at: " + m.mountPoint)
+
+	if err := waitForMount(ctx, m.mountPoint, m.logFn); err != nil {
+		return "", err
+	}
 	return m.mountPoint, nil
 }
 
@@ -125,6 +130,10 @@ func (m *Manager) MountRoot(ctx context.Context, path string) (string, error) {
 	m.isRoot = true
 	m.wasExisting = false
 	m.logFn("Successfully mounted with elevated permissions at: " + tmp)
+
+	if err := waitForMount(ctx, m.mountPoint, m.logFn); err != nil {
+		return "", err
+	}
 	return m.mountPoint, nil
 }
 
@@ -274,6 +283,25 @@ func FindInstallers(root string) ([]string, error) {
 	}
 
 	return append(append(prioritized, middle...), others...), nil
+}
+
+// waitForMount polls until the mount point is accessible, or times out.
+// udisksctl can return before the filesystem is fully available.
+func waitForMount(ctx context.Context, mountPoint string, logFn func(string)) error {
+	logFn("Waiting for mount point to become accessible: " + mountPoint)
+	deadline := time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) {
+		if _, err := os.Stat(mountPoint); err == nil {
+			logFn("Mount point is accessible.")
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(200 * time.Millisecond):
+		}
+	}
+	return fmt.Errorf("mount point %q did not become accessible within 10 seconds", mountPoint)
 }
 
 // indexOf returns the index of value in list, or -1 if not found.

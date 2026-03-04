@@ -38,10 +38,18 @@ func NewManager() *Manager {
 func (m *Manager) GetAvailableProtonVersions() []string {
 	var versions []string
 
-	// Official Proton installs in steamapps/common
+	// Official Proton installs in steamapps/common.
+	// Prefer the internal name from compatibilitytool.vdf if present, otherwise derive from folder name.
 	if entries, err := os.ReadDir(m.commonPath); err == nil {
 		for _, e := range entries {
 			if e.IsDir() && strings.HasPrefix(strings.ToLower(e.Name()), "proton") {
+				vdfPath := filepath.Join(m.commonPath, e.Name(), "compatibilitytool.vdf")
+				if data, err := os.ReadFile(vdfPath); err == nil {
+					if name := internalNameFromVDF(string(data)); name != "" {
+						versions = append(versions, name)
+						continue
+					}
+				}
 				versions = append(versions, folderToInternalName(e.Name()))
 			}
 		}

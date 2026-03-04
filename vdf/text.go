@@ -173,18 +173,26 @@ func dumpObject(b *bytes.Buffer, data map[string]any, indent int) {
 		case map[string]any:
 			// Nested object
 			b.WriteString(prefix)
-			b.WriteString(fmt.Sprintf("\"%s\"\n", k))
+			b.WriteString(fmt.Sprintf("\"%s\"\n", escapeVDFString(k)))
 			b.WriteString(prefix)
 			b.WriteString("{\n")
 			dumpObject(b, val, indent+1)
 			b.WriteString(prefix)
 			b.WriteString("}\n")
 		default:
-			// String value
+			// String value — escape backslashes and quotes so the file round-trips cleanly.
 			b.WriteString(prefix)
-			b.WriteString(fmt.Sprintf("\"%s\"\t\t\"%v\"\n", k, val))
+			b.WriteString(fmt.Sprintf("\"%s\"\t\t\"%s\"\n", k, escapeVDFString(fmt.Sprintf("%v", val))))
 		}
 	}
+}
+
+// escapeVDFString escapes backslashes and double-quotes inside a VDF string value
+// so that the file can be re-parsed correctly after being written.
+func escapeVDFString(s string) string {
+	s = strings.ReplaceAll(s, `\`, `\\`)
+	s = strings.ReplaceAll(s, `"`, `\"`)
+	return s
 }
 
 // GetNestedMap retrieves a nested map by a path of keys.

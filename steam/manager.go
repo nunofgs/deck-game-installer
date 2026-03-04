@@ -36,14 +36,17 @@ func NewManager() *Manager {
 	}
 }
 
-// firstUserID returns the first numeric user ID directory found in userdata.
+// firstUserID returns the real Steam user ID directory found in userdata.
+// It skips the "0" directory, which Steam creates as a special anonymous/fallback
+// context for things like default controller configs and shared settings — it is
+// not a real user account and does not contain shortcuts or per-user config.
 func firstUserID(userdata string) string {
 	entries, err := os.ReadDir(userdata)
 	if err != nil {
 		return "0"
 	}
 	for _, e := range entries {
-		if e.IsDir() && isDigits(e.Name()) {
+		if e.IsDir() && isDigits(e.Name()) && e.Name() != "0" {
 			return e.Name()
 		}
 	}

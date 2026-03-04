@@ -56,7 +56,9 @@ func runInstall(path string) {
 	}()
 
 	filename := filepath.Base(path)
-	logger := ui.NewGUILogger("Deck Game Installer", filename)
+	guiLogger := ui.NewGUILogger("Deck Game Installer", filename)
+	logger := ui.NewTeeLogger(guiLogger)
+	fmt.Printf("Logging to: %s\n", ui.LogPath())
 
 	// Run installer in background goroutine
 	go func() {
@@ -68,14 +70,16 @@ func runInstall(path string) {
 		buildPipeline(runner, path)
 
 		if err := runner.Run(ctx); err != nil {
-			logger.ShowFailed(err.Error())
+			logger.Log(fmt.Sprintf("[FATAL] %v", err))
+			guiLogger.ShowFailed(err.Error())
 		} else {
-			logger.ShowComplete()
+			logger.Log("[DONE] Installation completed successfully")
+			guiLogger.ShowComplete()
 		}
 	}()
 
 	// Run GUI on main thread — blocks until user closes
-	logger.Run()
+	guiLogger.Run()
 }
 
 // buildPipeline adds the appropriate steps based on the input path type.
@@ -98,12 +102,13 @@ func buildPipeline(runner *installer.Runner, path string) {
 	}
 
 	if isISO {
-		// ISO workflow: mount -> find installer -> add to steam -> etc.
+		// ISO workflow: shutdown steam first so it can't overwrite our shortcut on exit,
+		// then write the shortcut + proton config, then launch.
 		runner.AddSteps(
 			installer.NewMountISO(),
 			installer.NewFindInstaller(),
-			installer.NewAddToSteam(),
 			installer.NewShutdownSteam(),
+			installer.NewAddToSteam(),
 			installer.NewConfigureProton(),
 			installer.NewRunInstaller(),
 			installer.NewWaitForExit(),
@@ -113,13 +118,14 @@ func buildPipeline(runner *installer.Runner, path string) {
 			installer.NewFinalRestart(),
 		)
 	} else if isEXE {
-		// EXE workflow: use the exe directly, skip mount/find steps
+		// EXE workflow: shutdown steam first so it can't overwrite our shortcut on exit,
+		// then write the shortcut + proton config, then launch.
 		runner.State().InstallerPath = path
 		runner.State().GameName = installer.DeriveGameName(path)
 
 		runner.AddSteps(
-			installer.NewAddToSteam(),
 			installer.NewShutdownSteam(),
+			installer.NewAddToSteam(),
 			installer.NewConfigureProton(),
 			installer.NewRunInstaller(),
 			installer.NewWaitForExit(),
