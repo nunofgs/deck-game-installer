@@ -30,16 +30,9 @@ func (s *MountISO) Execute(ctx context.Context, state *State) error {
 	isoMgr.SetLogger(state.UI.Log)
 	state.ISOManager = isoMgr
 
-	// Try regular mount first
 	mountPoint, err := isoMgr.Mount(ctx, state.InputPath)
 	if err != nil {
-		state.UI.Log("Regular mount failed, trying with elevated permissions...")
-
-		// Try root mount as fallback
-		mountPoint, err = isoMgr.MountRoot(ctx, state.InputPath)
-		if err != nil {
-			return fmt.Errorf("failed to mount ISO: %w", err)
-		}
+		return fmt.Errorf("failed to mount ISO: %w", err)
 	}
 
 	state.MountPoint = mountPoint
@@ -56,16 +49,10 @@ func (s *MountISO) Execute(ctx context.Context, state *State) error {
 	return nil
 }
 
-// gameNameFromPath derives the game name from the ISO path and mount point.
-// If the mount point is a temp directory, uses the ISO filename instead.
-func gameNameFromPath(isoPath, mountPoint string) string {
-	base := filepath.Base(mountPoint)
-	// If it's our temp mount directory, use the ISO filename
-	if strings.HasPrefix(base, "deck-game-installer_mnt_") || len(base) <= 3 {
-		name := strings.TrimSuffix(filepath.Base(isoPath), filepath.Ext(isoPath))
-		return cleanGameName(name)
-	}
-	return cleanGameName(base)
+// gameNameFromPath derives the game name from the ISO filename.
+func gameNameFromPath(isoPath, _ string) string {
+	name := strings.TrimSuffix(filepath.Base(isoPath), filepath.Ext(isoPath))
+	return cleanGameName(name)
 }
 
 // cleanGameName cleans up a game name by replacing underscores/dots with spaces.
