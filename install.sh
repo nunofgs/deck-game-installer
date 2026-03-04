@@ -7,6 +7,14 @@ MENU_DIR="$HOME/.local/share/kio/servicemenus"
 RELEASE_URL="https://github.com/$REPO/releases/latest/download/deck-game-installer.zip"
 SCRIPT_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd || echo "")"
 
+if [ "${1}" = "--uninstall" ]; then
+  echo "Uninstalling deck-game-installer..."
+  rm -f "$BIN_DIR/deck-game-installer"
+  rm -f "$MENU_DIR/install-with-steam.desktop"
+  echo "Done!"
+  exit 0
+fi
+
 echo "Installing deck-game-installer..."
 
 mkdir -p "$BIN_DIR" "$MENU_DIR"

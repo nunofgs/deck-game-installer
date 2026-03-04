@@ -6,7 +6,7 @@ Installing a Windows game on Steam Deck manually means juggling shortcuts, Proto
 
 ---
 
-## Installation
+## Installation & Uninstallation
 
 **Option 1 — one-liner:**
 
@@ -23,6 +23,12 @@ curl -fsSL https://raw.githubusercontent.com/nunofgs/deck-game-installer/main/in
 unzip deck-game-installer.zip -d deck-game-installer
 cd deck-game-installer
 ./install.sh
+```
+
+**To uninstall:**
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/nunofgs/deck-game-installer/main/install.sh | sh -s -- --uninstall
 ```
 
 ## Usage
