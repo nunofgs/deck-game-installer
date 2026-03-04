@@ -36,51 +36,35 @@ func NewManager() *Manager {
 // GetAvailableProtonVersions returns all installed Proton versions,
 // sorted with Experimental first, then descending by version number.
 func (m *Manager) GetAvailableProtonVersions() []string {
-	fmt.Printf("[GetAvailableProtonVersions] Scanning commonPath: %s\n", m.commonPath)
-	fmt.Printf("[GetAvailableProtonVersions] Scanning compatToolsPath: %s\n", m.compatToolsPath)
-
 	var versions []string
 
 	// Official Proton installs in steamapps/common
-	entries, err := os.ReadDir(m.commonPath)
-	if err != nil {
-		fmt.Printf("[GetAvailableProtonVersions] ERROR reading commonPath: %v\n", err)
-	} else {
+	if entries, err := os.ReadDir(m.commonPath); err == nil {
 		for _, e := range entries {
 			if e.IsDir() && strings.HasPrefix(strings.ToLower(e.Name()), "proton") {
-				internal := folderToInternalName(e.Name())
-				fmt.Printf("[GetAvailableProtonVersions] Found official Proton folder %q -> internal name %q\n", e.Name(), internal)
-				versions = append(versions, internal)
+				versions = append(versions, folderToInternalName(e.Name()))
 			}
 		}
 	}
 
 	// Custom builds (Proton-GE etc.) in compatibilitytools.d
-	customEntries, err := os.ReadDir(m.compatToolsPath)
-	if err != nil {
-		fmt.Printf("[GetAvailableProtonVersions] ERROR reading compatToolsPath (may be absent): %v\n", err)
-	} else {
-		for _, e := range customEntries {
+	if entries, err := os.ReadDir(m.compatToolsPath); err == nil {
+		for _, e := range entries {
 			if !e.IsDir() {
 				continue
 			}
 			vdfPath := filepath.Join(m.compatToolsPath, e.Name(), "compatibilitytool.vdf")
 			if data, err := os.ReadFile(vdfPath); err == nil {
 				if name := internalNameFromVDF(string(data)); name != "" {
-					fmt.Printf("[GetAvailableProtonVersions] Found custom tool %q via VDF -> internal name %q\n", e.Name(), name)
 					versions = append(versions, name)
 					continue
 				}
 			}
-			internal := folderToInternalName(e.Name())
-			fmt.Printf("[GetAvailableProtonVersions] Found custom tool %q (no VDF) -> internal name %q\n", e.Name(), internal)
-			versions = append(versions, internal)
+			versions = append(versions, folderToInternalName(e.Name()))
 		}
 	}
 
 	versions = unique(versions)
-	fmt.Printf("[GetAvailableProtonVersions] Unique versions before sort (%d): %v\n", len(versions), versions)
-
 	sort.Slice(versions, func(i, j int) bool {
 		vi, vj := versions[i], versions[j]
 		if strings.Contains(strings.ToLower(vi), "experimental") {
@@ -91,8 +75,6 @@ func (m *Manager) GetAvailableProtonVersions() []string {
 		}
 		return vi > vj
 	})
-
-	fmt.Printf("[GetAvailableProtonVersions] Final sorted versions (%d): %v\n", len(versions), versions)
 	return versions
 }
 
