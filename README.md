@@ -6,7 +6,7 @@ Installing a Windows game on Steam Deck manually means juggling shortcuts, Proto
 
 ---
 
-## Installation & Uninstallation
+## Installation
 
 **Option 1 — one-liner:**
 
