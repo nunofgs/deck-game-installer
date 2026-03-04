@@ -41,4 +41,3 @@ jobs:
         with:
           files: |
             deck-game-installer.zip
-            install.sh

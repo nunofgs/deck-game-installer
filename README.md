@@ -11,7 +11,7 @@ Installing a Windows game on Steam Deck manually means juggling shortcuts, Proto
 **Option 1 — one-liner:**
 
 ```bash
-curl -fsSL https://github.com/nunofgs/deck-game-installer/releases/latest/download/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/nunofgs/deck-game-installer/main/install.sh | sh
 ```
 
 **Option 2 — download the zip:**
