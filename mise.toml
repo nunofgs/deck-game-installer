@@ -8,10 +8,11 @@ run = "brew install mesa libx11 libxrandr libxcursor libxi libxinerama"
 [tasks.app]
 description = "Build and install the application"
 run = """
+BREW=$(brew --prefix)
 rm -f $HOME/.local/bin/deck-game-installer
-PKG_CONFIG_PATH=/home/linuxbrew/.linuxbrew/lib/pkgconfig \
-CGO_CFLAGS=-I/home/linuxbrew/.linuxbrew/include \
-CGO_LDFLAGS=-L/home/linuxbrew/.linuxbrew/lib \
+PKG_CONFIG_PATH=$BREW/lib/pkgconfig \
+CGO_CFLAGS=-I$BREW/include \
+CGO_LDFLAGS=-L$BREW/lib \
 GOBIN=$HOME/.local/bin go install ./cmd/deck-game-installer
 """
 
