@@ -74,6 +74,7 @@ func runInstall(path string) {
 			guiLogger.ShowFailed(err.Error())
 		} else {
 			logger.Log("[DONE] Installation completed successfully")
+			guiLogger.SetAppID(runner.State().AppID)
 			guiLogger.ShowComplete()
 		}
 	}()

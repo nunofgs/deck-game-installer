@@ -79,7 +79,11 @@ type GUILogger struct {
 	quitBtn      *widget.Button
 	proceedBtn   *widget.Button
 	openSteamBtn *widget.Button
+	launchBtn    *widget.Button
 	closeBtn     *widget.Button
+
+	// Set after shortcut is created
+	appID int32
 
 	// Channels
 	cancelCh  chan struct{}
@@ -144,6 +148,12 @@ func NewGUILogger(windowTitle, filename string) *GUILogger {
 		g.openSteamBtn = widget.NewButton("Open in Steam", func() {
 			exec.Command("xdg-open", "steam://open/library").Start()
 		})
+
+	g.launchBtn = widget.NewButton("Launch Game", func() {
+		if g.appID != 0 {
+			exec.Command("xdg-open", fmt.Sprintf("steam://rungameid/%d", uint32(g.appID))).Start()
+		}
+	})
 
 	g.closeBtn = widget.NewButton("Close", func() {
 		a.Quit()
@@ -603,6 +613,10 @@ func (g *GUILogger) WaitWithManualOverride() <-chan struct{} {
 	return g.proceedCh
 }
 
+func (g *GUILogger) SetAppID(appID int32) {
+	g.appID = appID
+}
+
 func (g *GUILogger) ShowComplete() {
 	g.runOnUI(func() {
 		g.mu.Lock()
@@ -625,7 +639,7 @@ func (g *GUILogger) ShowComplete() {
 			container.NewHBox(successIcon, successTitle),
 			successMsg,
 			widget.NewSeparator(),
-			container.NewHBox(g.openSteamBtn, g.closeBtn),
+			container.NewHBox(g.openSteamBtn, g.launchBtn, g.closeBtn),
 		)
 
 		// Create a bordered success box
