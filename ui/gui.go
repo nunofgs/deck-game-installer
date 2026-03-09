@@ -421,9 +421,12 @@ func (g *GUILogger) createStepWidget(status *StepStatus, isLast bool, index int)
 		lineContainer = layout.NewSpacer()
 	}
 
-	// Left column: circle + line
+	// Left column: circle + line.
+	// Labels have theme.InnerPadding() (4px) top padding, so nudge the
+	// circle down by the same amount so it aligns with the text centre.
+	paddedCircle := container.New(layout.NewCustomPaddedLayout(theme.InnerPadding(), 0, 0, 0), circleContainer)
 	leftColumn := container.NewVBox(
-		circleContainer,
+		paddedCircle,
 		lineContainer,
 	)
 
