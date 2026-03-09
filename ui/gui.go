@@ -370,31 +370,39 @@ func (g *GUILogger) refreshStepList() {
 }
 
 func (g *GUILogger) createStepWidget(status *StepStatus, isLast bool, index int) fyne.CanvasObject {
-	// Circle indicator
+	// Circle indicator (or spinner when running)
 	circleSize := float32(24)
-	circle := canvas.NewCircle(g.getStatusColor(status.Status))
-	circle.StrokeWidth = 0
 
-	// Status icon inside circle
-	var iconText string
-	switch status.Status {
-	case StepCompleted:
-		iconText = "✓"
-	case StepFailed:
-		iconText = "✗"
-	default:
-		iconText = ""
+	var circleContainer fyne.CanvasObject
+	if status.Status == StepRunning {
+		spinner := widget.NewActivity()
+		spinner.Start()
+		sized := container.New(&fixedSizeLayout{size: fyne.NewSize(circleSize, circleSize)}, spinner)
+		circleContainer = container.NewCenter(sized)
+	} else {
+		circle := canvas.NewCircle(g.getStatusColor(status.Status))
+		circle.StrokeWidth = 0
+
+		var iconText string
+		switch status.Status {
+		case StepCompleted:
+			iconText = "✓"
+		case StepFailed:
+			iconText = "✗"
+		default:
+			iconText = ""
+		}
+
+		iconLabel := canvas.NewText(iconText, color.White)
+		iconLabel.TextSize = 14
+		iconLabel.TextStyle = fyne.TextStyle{Bold: true}
+		iconLabel.Alignment = fyne.TextAlignCenter
+
+		circleContainer = container.NewStack(
+			container.NewCenter(newSizedCircle(circle, circleSize)),
+			container.NewCenter(iconLabel),
+		)
 	}
-
-	iconLabel := canvas.NewText(iconText, color.White)
-	iconLabel.TextSize = 14
-	iconLabel.TextStyle = fyne.TextStyle{Bold: true}
-	iconLabel.Alignment = fyne.TextAlignCenter
-
-	circleContainer := container.NewStack(
-		container.NewCenter(newSizedCircle(circle, circleSize)),
-		container.NewCenter(iconLabel),
-	)
 
 	// Connector line (vertical, below the circle)
 	var lineContainer fyne.CanvasObject
@@ -722,6 +730,22 @@ func (r *sizedCircleRenderer) Objects() []fyne.CanvasObject {
 }
 
 func (r *sizedCircleRenderer) Destroy() {}
+
+// fixedSizeLayout constrains its single child to a fixed size.
+type fixedSizeLayout struct {
+	size fyne.Size
+}
+
+func (f *fixedSizeLayout) Layout(objects []fyne.CanvasObject, _ fyne.Size) {
+	for _, o := range objects {
+		o.Resize(f.size)
+		o.Move(fyne.NewPos(0, 0))
+	}
+}
+
+func (f *fixedSizeLayout) MinSize(_ []fyne.CanvasObject) fyne.Size {
+	return f.size
+}
 
 // Helper: tappable container
 type tappableContainer struct {
