@@ -422,11 +422,14 @@ func (g *GUILogger) createStepWidget(status *StepStatus, isLast bool, index int)
 	}
 
 	// Left column: circle + line.
-	// Labels have theme.InnerPadding() (4px) top padding, so nudge the
-	// circle down by the same amount so it aligns with the text centre.
-	paddedCircle := container.New(layout.NewCustomPaddedLayout(0.5, 0, 0, 0), circleContainer)
+	// Wrap the circle in a container that centres it vertically within
+	// the height of one text row, so it sits flush with the label text.
+	rowHeight := widget.NewLabel("X").MinSize().Height
+	centeredCircle := container.New(&fixedSizeLayout{size: fyne.NewSize(circleSize, rowHeight)},
+		container.NewCenter(circleContainer),
+	)
 	leftColumn := container.NewVBox(
-		paddedCircle,
+		centeredCircle,
 		lineContainer,
 	)
 
