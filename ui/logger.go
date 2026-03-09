@@ -28,4 +28,8 @@ type Logger interface {
 	// WaitWithManualOverride shows a button the user can click to proceed manually.
 	// Used while waiting for the installer to complete; returns a channel that fires on click.
 	WaitWithManualOverride() <-chan struct{}
+
+	// ConfirmRetry shows a dialog with "Cancel" and "Scan Again" buttons.
+	// Returns true if the user wants to retry, false if they cancelled.
+	ConfirmRetry(title, message string) bool
 }

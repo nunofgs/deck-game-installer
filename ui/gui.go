@@ -568,6 +568,21 @@ func (g *GUILogger) Select(title, prompt string, opts []string) (string, bool) {
 	}
 }
 
+func (g *GUILogger) ConfirmRetry(title, message string) bool {
+	ch := make(chan bool, 1)
+	g.runOnUI(func() {
+		g.raiseWindow()
+		d := dialog.NewCustomConfirm(title, "Scan Again", "Cancel",
+			widget.NewLabel(message),
+			func(ok bool) { ch <- ok },
+			g.window,
+		)
+		d.Resize(fyne.NewSize(420, 200))
+		d.Show()
+	})
+	return <-ch
+}
+
 func (g *GUILogger) WaitWithManualOverride() <-chan struct{} {
 	g.runOnUI(func() {
 		g.statusLabel.SetText("Waiting for installer to finish...")

@@ -27,31 +27,29 @@ func (s *FindGame) Execute(ctx context.Context, state *State) error {
 		return fmt.Errorf("failed to scan for game executables: %w", err)
 	}
 
-	if len(executables) == 0 {
-		keep := state.UI.Confirm(
-			"No Game Found",
+	for len(executables) == 0 {
+		retry := state.UI.ConfirmRetry(
+			"No Game Executables Found",
 			"Could not find any game executables in the Proton prefix.\n\n"+
 				"This might happen if:\n"+
+				"• The installer is still running\n"+
 				"• The installer didn't complete successfully\n"+
 				"• The game installed to a non-standard location\n\n"+
-				"Keep the Steam shortcut so you can configure it manually later?",
+				"Finish the installation and click \"Scan Again\", or cancel to stop here.\n"+
+				"The Steam shortcut will be left in place — to remove it, right-click\n"+
+				"the game in Steam → Manage → Remove from your library.",
 		)
-		if keep {
-			state.UI.Log("Keeping shortcut for manual configuration")
-			return nil
+		if !retry {
+			state.UI.Log("Cancelled — Steam shortcut left in place.")
+			state.UI.Log("To remove it: right-click the game in Steam → Manage → Remove from your library.")
+			return fmt.Errorf("no game executables found — shortcut left in place")
 		}
-		state.UI.Log("Removing Steam shortcut...")
-		if err := state.Steam.DeleteShortcut(state.AppID); err != nil {
-			return fmt.Errorf("no game executables found; also failed to remove shortcut: %w", err)
+
+		state.UI.Log("Scanning again...")
+		executables, err = state.Proton.ScanPrefixForExecutables(state.AppID)
+		if err != nil {
+			return fmt.Errorf("failed to scan for game executables: %w", err)
 		}
-		state.UI.Log("Restarting Steam to apply shortcut removal...")
-		if err := state.Steam.ShutdownSteam(ctx); err != nil {
-			return fmt.Errorf("shortcut removed but failed to restart Steam: %w", err)
-		}
-		if err := state.Steam.StartSteam(); err != nil {
-			return fmt.Errorf("shortcut removed but failed to start Steam: %w", err)
-		}
-		return fmt.Errorf("no game executables found — shortcut removed")
 	}
 
 	state.UI.Log(fmt.Sprintf("Found %d potential game executable(s)", len(executables)))
@@ -64,9 +62,9 @@ func (s *FindGame) Execute(ctx context.Context, state *State) error {
 	)
 
 	if !ok {
-		// User cancelled, keep original shortcut
-		state.UI.Log("Selection cancelled, keeping original shortcut")
-		return nil
+		state.UI.Log("Selection cancelled — Steam shortcut left in place.")
+		state.UI.Log("To remove it: right-click the game in Steam → Manage → Remove from your library.")
+		return fmt.Errorf("executable selection cancelled — shortcut left in place")
 	}
 
 	state.GameExePath = selected

@@ -95,15 +95,10 @@ func waitForSteamGameToExit(ctx context.Context, gameID string, logFn func(strin
 	ticker := time.NewTicker(500 * time.Millisecond)
 	defer ticker.Stop()
 
-	timeout := time.After(5 * time.Minute) // 5 minute timeout
-
 	for {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-
-		case <-timeout:
-			return fmt.Errorf("timeout waiting for installer")
 
 		case <-ticker.C:
 			file, err := os.Open(logPath)

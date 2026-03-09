@@ -89,3 +89,10 @@ func (t *TeeLogger) WaitWithManualOverride() <-chan struct{} {
 	t.writeLine("[WAIT] Showing manual override button...")
 	return t.inner.WaitWithManualOverride()
 }
+
+func (t *TeeLogger) ConfirmRetry(title, message string) bool {
+	t.writeLine(fmt.Sprintf("[CONFIRM RETRY] %s — %s", title, message))
+	result := t.inner.ConfirmRetry(title, message)
+	t.writeLine(fmt.Sprintf("[CONFIRM RETRY RESULT] %v", result))
+	return result
+}
