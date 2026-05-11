@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
@@ -25,10 +26,10 @@ type Identification struct {
 	Reason     string
 }
 
-// AppListEntry is one row from Steam's public app list.
+// AppListEntry is one app candidate returned by Steam Store search.
 type AppListEntry struct {
-	AppID int    `json:"appid"`
-	Name  string `json:"name"`
+	AppID int
+	Name  string
 }
 
 // Identifier identifies the Steam app that most likely matches a local path.
@@ -86,7 +87,7 @@ func (i *Identifier) IdentifyWithHints(ctx context.Context, path string, hints [
 		return ident, nil
 	}
 
-	return i.identifyFromAppList(ctx, path, root, hints)
+	return i.identifyFromStoreSearch(ctx, path, root, hints)
 }
 
 func identityRoot(path string) (string, error) {
@@ -206,12 +207,7 @@ func (i *Identifier) steamAppsDirs() []string {
 	return dedupeStrings(paths)
 }
 
-func (i *Identifier) identifyFromAppList(ctx context.Context, path, root string, hints []string) (Identification, error) {
-	apps, err := i.appList(ctx)
-	if err != nil {
-		return Identification{}, err
-	}
-
+func (i *Identifier) identifyFromStoreSearch(ctx context.Context, path, root string, hints []string) (Identification, error) {
 	names := append(candidateNames(path, root), hints...)
 	names = cleanCandidateNames(names)
 	if len(names) == 0 {
@@ -224,15 +220,20 @@ func (i *Identifier) identifyFromAppList(ctx context.Context, path, root string,
 		name  string
 	}
 	var matches []match
-	for _, app := range apps {
-		if app.Name == "" {
-			continue
+	for _, candidate := range names {
+		apps, err := i.searchApps(ctx, candidate)
+		if err != nil {
+			return Identification{}, err
 		}
-		for _, candidate := range names {
-			score := nameScore(candidate, app.Name)
-			if score > 0 {
-				matches = append(matches, match{app: app, score: score, name: candidate})
+		for _, app := range apps {
+			if app.Name == "" {
+				continue
 			}
+			score := nameScore(candidate, app.Name)
+			if score <= 0 {
+				continue
+			}
+			matches = append(matches, match{app: app, score: score, name: candidate})
 		}
 	}
 	sort.Slice(matches, func(a, b int) bool {
@@ -257,15 +258,20 @@ func (i *Identifier) identifyFromAppList(ctx context.Context, path, root string,
 		AppID:      top.app.AppID,
 		Name:       top.app.Name,
 		Confidence: top.score,
-		Reason:     fmt.Sprintf("matched Steam app list name %q", top.name),
+		Reason:     fmt.Sprintf("matched Steam Store search name %q", top.name),
 	}, nil
 }
 
-func (i *Identifier) appList(ctx context.Context) ([]AppListEntry, error) {
+func (i *Identifier) searchApps(ctx context.Context, term string) ([]AppListEntry, error) {
 	if len(i.apps) > 0 {
 		return i.apps, nil
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://api.steampowered.com/ISteamApps/GetAppList/v2/", nil)
+
+	values := url.Values{}
+	values.Set("term", term)
+	values.Set("l", "english")
+	values.Set("cc", "US")
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://store.steampowered.com/api/storesearch/?"+values.Encode(), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -275,18 +281,26 @@ func (i *Identifier) appList(ctx context.Context) ([]AppListEntry, error) {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("Steam app list returned HTTP %d", resp.StatusCode)
+		return nil, fmt.Errorf("Steam Store search returned HTTP %d", resp.StatusCode)
 	}
 	var out struct {
-		AppList struct {
-			Apps []AppListEntry `json:"apps"`
-		} `json:"applist"`
+		Items []struct {
+			Type string `json:"type"`
+			ID   int    `json:"id"`
+			Name string `json:"name"`
+		} `json:"items"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
 		return nil, err
 	}
-	i.apps = out.AppList.Apps
-	return i.apps, nil
+	apps := make([]AppListEntry, 0, len(out.Items))
+	for _, item := range out.Items {
+		if item.Type != "app" || item.ID == 0 || item.Name == "" {
+			continue
+		}
+		apps = append(apps, AppListEntry{AppID: item.ID, Name: item.Name})
+	}
+	return apps, nil
 }
 
 func candidateNames(path, root string) []string {
