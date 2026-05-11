@@ -91,6 +91,11 @@ func (m *Manager) prefixRoot(appID int32) string {
 	return filepath.Join(m.compatDataPath, strconv.FormatUint(uint64(uint32(appID)), 10), "pfx")
 }
 
+// PrefixRoot returns the pfx directory for a given app ID.
+func (m *Manager) PrefixRoot(appID int32) string {
+	return m.prefixRoot(appID)
+}
+
 // PrefixPath returns the drive_c path inside the Proton prefix for a given app ID.
 func (m *Manager) PrefixPath(appID int32) string {
 	return filepath.Join(m.prefixRoot(appID), "drive_c")

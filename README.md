@@ -60,6 +60,7 @@ Right-click any ISO or EXE in Dolphin and choose **Install with Steam**.
 ```bash
 deck-game-installer /path/to/game.iso
 deck-game-installer /path/to/setup.exe
+deck-game-installer /path/to/portable-game/Game.exe
 deck-game-installer smb://mynas/games/game.iso
 ```
 
@@ -67,11 +68,11 @@ SMB paths are useful for installing directly from a NAS without copying files to
 
 ## How it works
 
-1. Mounts the ISO (or SMB share)
-2. Finds and launches the installer through Steam/Proton
-3. Watches Steam's logs to detect when the installer exits
-4. Scans the Proton prefix for the installed game executable
-5. Updates the Steam shortcut to point at the game
+1. Detects whether the input is an installer or a portable game executable
+2. Mounts the ISO or SMB share if needed
+3. Creates a Steam shortcut and configures Proton
+4. Tries to match the game to Steam appinfo and install declared common redistributables with Protontricks/Winetricks
+5. For installers, launches setup and then updates the shortcut to the installed game executable
 
 ## License
 

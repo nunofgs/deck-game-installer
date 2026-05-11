@@ -40,6 +40,7 @@ func printUsage() {
 	fmt.Println("Examples:")
 	fmt.Println("  deck-game-installer /path/to/game.iso")
 	fmt.Println("  deck-game-installer /path/to/setup.exe")
+	fmt.Println("  deck-game-installer /path/to/portable-game/Game.exe")
 	fmt.Println("  deck-game-installer smb://server/share/game.iso")
 }
 
@@ -66,15 +67,13 @@ func runInstall(path string) {
 		protonMgr := proton.NewManager()
 
 		state := installer.NewState(path, logger, steamMgr, protonMgr)
-		runner := installer.NewRunner(state)
-		buildPipeline(runner, path)
 
-		if err := runner.Run(ctx); err != nil {
+		if err := runWorkflow(ctx, state, path); err != nil {
 			logger.Log(fmt.Sprintf("[FATAL] %v", err))
 			guiLogger.ShowFailed(err.Error())
 		} else {
 			logger.Log("[DONE] Installation completed successfully")
-			guiLogger.SetAppID(runner.State().AppID)
+			guiLogger.SetAppID(state.AppID)
 			guiLogger.ShowComplete()
 		}
 	}()
@@ -83,59 +82,74 @@ func runInstall(path string) {
 	guiLogger.Run()
 }
 
-// buildPipeline adds the appropriate steps based on the input path type.
-func buildPipeline(runner *installer.Runner, path string) {
-	// Check if it's an SMB path
-	smbInfo := smb.ParseSMBPath(path)
-	isISO := strings.HasSuffix(strings.ToLower(path), ".iso")
-	isEXE := strings.HasSuffix(strings.ToLower(path), ".exe")
-
-	if smbInfo != nil {
-		// SMB path - need to mount the share first
-		runner.AddSteps(installer.NewMountSMB(smbInfo))
-
-		// After SMB mount, the path becomes local
-		if strings.HasSuffix(strings.ToLower(smbInfo.RelPath), ".iso") {
-			isISO = true
-		} else if strings.HasSuffix(strings.ToLower(smbInfo.RelPath), ".exe") {
-			isEXE = true
-		}
+func runWorkflow(ctx context.Context, state *installer.State, path string) error {
+	if err := runPreparation(ctx, state, path); err != nil {
+		return err
 	}
+	return runSelectedPipeline(ctx, state)
+}
 
-	if isISO {
-		// ISO workflow: shutdown steam first so it can't overwrite our shortcut on exit,
-		// then write the shortcut + proton config, then launch.
+func runPreparation(ctx context.Context, state *installer.State, path string) error {
+	runner := installer.NewRunner(state)
+	smbInfo := smb.ParseSMBPath(path)
+	if smbInfo != nil {
+		runner.AddSteps(installer.NewMountSMB(smbInfo))
+	}
+	runner.AddSteps(installer.NewResolveInputMode())
+	return runner.Run(ctx)
+}
+
+func runSelectedPipeline(ctx context.Context, state *installer.State) error {
+	runner := installer.NewRunner(state)
+	isISO := strings.HasSuffix(strings.ToLower(state.InputPath), ".iso")
+
+	switch state.InputMode {
+	case installer.InputModeInstaller:
+		if isISO {
+			runner.AddSteps(
+				installer.NewMountISO(),
+				installer.NewFindInstaller(),
+				installer.NewShutdownSteam(),
+				installer.NewAddToSteam(),
+				installer.NewConfigureProton(),
+				installer.NewInstallSteamRedists(),
+				installer.NewRunInstaller(),
+				installer.NewWaitForExit(),
+				installer.NewFindGame(),
+				installer.NewUpdateShortcut(),
+				installer.NewUnmount(),
+				installer.NewFinalRestart(),
+			)
+			return runner.Run(ctx)
+		}
+
+		state.InstallerPath = state.InputPath
+		state.GameName = installer.DeriveGameName(state.InputPath)
 		runner.AddSteps(
-			installer.NewMountISO(),
-			installer.NewFindInstaller(),
 			installer.NewShutdownSteam(),
 			installer.NewAddToSteam(),
 			installer.NewConfigureProton(),
+			installer.NewInstallSteamRedists(),
 			installer.NewRunInstaller(),
 			installer.NewWaitForExit(),
 			installer.NewFindGame(),
 			installer.NewUpdateShortcut(),
-			installer.NewUnmount(),
 			installer.NewFinalRestart(),
 		)
-	} else if isEXE {
-		// EXE workflow: shutdown steam first so it can't overwrite our shortcut on exit,
-		// then write the shortcut + proton config, then launch.
-		runner.State().InstallerPath = path
-		runner.State().GameName = installer.DeriveGameName(path)
+		return runner.Run(ctx)
 
+	case installer.InputModePortable:
 		runner.AddSteps(
+			installer.NewFindPortableGame(),
 			installer.NewShutdownSteam(),
-			installer.NewAddToSteam(),
+			installer.NewAddGameToSteam(),
 			installer.NewConfigureProton(),
-			installer.NewRunInstaller(),
-			installer.NewWaitForExit(),
-			installer.NewFindGame(),
-			installer.NewUpdateShortcut(),
+			installer.NewInstallSteamRedists(),
 			installer.NewFinalRestart(),
 		)
-	} else {
-		fmt.Printf("Error: Unsupported file type. Expected .iso or .exe, got: %s\n", path)
-		os.Exit(1)
+		return runner.Run(ctx)
+
+	default:
+		return fmt.Errorf("unsupported input mode: %s", state.InputMode)
 	}
 }
