@@ -22,6 +22,39 @@ const commonRedistsAppID = 228980
 
 var appBlockStart = regexp.MustCompile(`^\s*"(\d+)"\s*$`)
 
+type commonRedistMapping struct {
+	name  string
+	verbs []string
+}
+
+var commonRedistDepotMappings = map[string]commonRedistMapping{
+	"228982": {name: "VC 2008 Redist", verbs: []string{"vcrun2008"}},
+	"228983": {name: "VC 2010 Redist", verbs: []string{"vcrun2010"}},
+	"228984": {name: "VC 2012 Redist", verbs: []string{"vcrun2012"}},
+	"228985": {name: "VC 2013 Redist", verbs: []string{"vcrun2013"}},
+	"228986": {name: "VC 2015 Redist", verbs: []string{"vcrun2019"}},
+	"228987": {name: "VC 2017 Redist", verbs: []string{"vcrun2019"}},
+	"228988": {name: "VC 2019 Redist", verbs: []string{"vcrun2019"}},
+	"228989": {name: "VC 2022 Redist", verbs: []string{"vcrun2022"}},
+	"228990": {name: "DirectX Jun 2010 Redist", verbs: []string{"d3dx9", "d3dcompiler_43", "xact"}},
+	"229000": {name: ".NET 3.5 Redist", verbs: []string{"dotnet35"}},
+	"229001": {name: ".NET 3.5 Client Profile Redist", verbs: []string{"dotnet35"}},
+	"229002": {name: ".NET 4.0 Redist", verbs: []string{"dotnet40"}},
+	"229003": {name: ".NET 4.0 Client Profile Redist", verbs: []string{"dotnet40"}},
+	"229004": {name: ".NET 4.5.2 Redist", verbs: []string{"dotnet452"}},
+	"229005": {name: ".NET 4.6 Redist", verbs: []string{"dotnet462"}},
+	"229006": {name: ".NET 4.7 Redist", verbs: []string{"dotnet472"}},
+	"229007": {name: ".NET 4.8 Redist", verbs: []string{"dotnet48"}},
+	"229010": {name: "XNA 3.0 Redist"},
+	"229011": {name: "XNA 3.1 Redist", verbs: []string{"xna31"}},
+	"229012": {name: "XNA 4.0 Redist", verbs: []string{"xna40"}},
+	"229020": {name: "OpenAL 2.0.7.0 Redist", verbs: []string{"openal"}},
+	"229030": {name: "PhysX System Software 8.09.04", verbs: []string{"physx"}},
+	"229031": {name: "PhysX System Software 9.12.1031", verbs: []string{"physx"}},
+	"229032": {name: "PhysX System Software 9.13.1220", verbs: []string{"physx"}},
+	"229033": {name: "PhysX System Software 9.14.0702", verbs: []string{"physx"}},
+}
+
 // SteamRedist is one Steamworks Common Redistributables depot referenced by a game.
 type SteamRedist struct {
 	DepotID string
@@ -74,7 +107,7 @@ func (r *RedistResolver) Resolve(ctx context.Context, appID int) ([]SteamRedist,
 
 	redists := ExtractCommonRedists(app, common)
 	for i := range redists {
-		redists[i].Verbs = VerbsForRedistName(redists[i].Name)
+		redists[i].Verbs = VerbsForRedist(redists[i])
 	}
 	return redists, nil
 }
@@ -306,7 +339,7 @@ func ExtractCommonRedists(appInfo, commonInfo map[string]any) []SteamRedist {
 			name = firstRecursiveString(commonDepot, "name", "display_name", "description")
 		}
 		if name == "" {
-			name = commonRedistDepotName(depotID)
+			name = commonRedistDepotDisplayName(depotID)
 		}
 		if name == "" {
 			name = "Steam common redist depot " + depotID
@@ -317,35 +350,11 @@ func ExtractCommonRedists(appInfo, commonInfo map[string]any) []SteamRedist {
 	return redists
 }
 
-func commonRedistDepotName(depotID string) string {
-	names := map[string]string{
-		"228982": "VC 2008 Redist",
-		"228983": "VC 2010 Redist",
-		"228984": "VC 2012 Redist",
-		"228985": "VC 2013 Redist",
-		"228986": "VC 2015 Redist",
-		"228987": "VC 2017 Redist",
-		"228988": "VC 2019 Redist",
-		"228989": "VC 2022 Redist",
-		"228990": "DirectX Jun 2010 Redist",
-		"229000": ".NET 3.5 Redist",
-		"229001": ".NET 3.5 Client Profile Redist",
-		"229002": ".NET 4.0 Redist",
-		"229003": ".NET 4.0 Client Profile Redist",
-		"229004": ".NET 4.5.2 Redist",
-		"229005": ".NET 4.6 Redist",
-		"229006": ".NET 4.7 Redist",
-		"229007": ".NET 4.8 Redist",
-		"229010": "XNA 3.0 Redist",
-		"229011": "XNA 3.1 Redist",
-		"229012": "XNA 4.0 Redist",
-		"229020": "OpenAL 2.0.7.0 Redist",
-		"229030": "PhysX System Software 8.09.04",
-		"229031": "PhysX System Software 9.12.1031",
-		"229032": "PhysX System Software 9.13.1220",
-		"229033": "PhysX System Software 9.14.0702",
+func commonRedistDepotDisplayName(depotID string) string {
+	if mapping, ok := commonRedistDepotMappings[depotID]; ok {
+		return mapping.name
 	}
-	return names[depotID]
+	return ""
 }
 
 func referencesCommonRedists(depot map[string]any, depotID string, commonDepots map[string]any) bool {
@@ -398,6 +407,16 @@ func firstRecursiveString(m map[string]any, keys ...string) string {
 	return ""
 }
 
+// VerbsForRedist maps a Steam common redist to winetricks verbs. Known
+// Steamworks Common Redistributables depots use depot IDs first; fetched names
+// are only a fallback for unknown future depots or unusual appinfo.
+func VerbsForRedist(redist SteamRedist) []string {
+	if mapping, ok := commonRedistDepotMappings[redist.DepotID]; ok {
+		return append([]string(nil), mapping.verbs...)
+	}
+	return VerbsForRedistName(redist.Name)
+}
+
 // VerbsForRedistName maps a fetched Steam redist name to winetricks verbs.
 func VerbsForRedistName(name string) []string {
 	n := normalizeForMatch(name)
@@ -419,7 +438,10 @@ func VerbsForRedistName(name string) []string {
 		if strings.Contains(n, "3 1") || strings.Contains(n, "31") {
 			return []string{"xna31"}
 		}
-		return []string{"xna40"}
+		if strings.Contains(n, "4 0") || strings.Contains(n, "40") {
+			return []string{"xna40"}
+		}
+		return nil
 	case strings.Contains(n, "physx"):
 		return []string{"physx"}
 	default:
@@ -445,19 +467,26 @@ func vcRunVerb(name string) []string {
 }
 
 func dotnetVerb(name string) []string {
-	versionMap := map[string]string{
-		"4 8": "dotnet48",
-		"48":  "dotnet48",
-		"4 7": "dotnet472",
-		"47":  "dotnet472",
-		"4 6": "dotnet462",
-		"46":  "dotnet462",
-		"4 5": "dotnet452",
-		"45":  "dotnet452",
+	versionMap := []struct {
+		marker string
+		verb   string
+	}{
+		{marker: "4 8", verb: "dotnet48"},
+		{marker: "48", verb: "dotnet48"},
+		{marker: "4 7", verb: "dotnet472"},
+		{marker: "47", verb: "dotnet472"},
+		{marker: "4 6", verb: "dotnet462"},
+		{marker: "46", verb: "dotnet462"},
+		{marker: "4 5", verb: "dotnet452"},
+		{marker: "45", verb: "dotnet452"},
+		{marker: "4 0", verb: "dotnet40"},
+		{marker: "40", verb: "dotnet40"},
+		{marker: "3 5", verb: "dotnet35"},
+		{marker: "35", verb: "dotnet35"},
 	}
-	for marker, verb := range versionMap {
-		if strings.Contains(name, marker) {
-			return []string{verb}
+	for _, version := range versionMap {
+		if strings.Contains(name, version.marker) {
+			return []string{version.verb}
 		}
 	}
 	return []string{"dotnet48"}
@@ -471,7 +500,7 @@ func WinetricksVerbs(redists []SteamRedist) []string {
 			verbs = append(verbs, redist.Verbs...)
 			continue
 		}
-		verbs = append(verbs, VerbsForRedistName(redist.Name)...)
+		verbs = append(verbs, VerbsForRedist(redist)...)
 	}
 	return dedupeStrings(verbs)
 }

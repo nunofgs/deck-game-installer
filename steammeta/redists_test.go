@@ -98,7 +98,7 @@ func TestResolveCommonRedistsAddsVerbs(t *testing.T) {
 	}
 }
 
-func TestExtractCommonRedistsUsesDepotIDNames(t *testing.T) {
+func TestExtractCommonRedistsUsesDepotIDVerbs(t *testing.T) {
 	app := map[string]any{
 		"depots": map[string]any{
 			"228989": map[string]any{"depotfromapp": "228980", "sharedinstall": "1"},
@@ -119,6 +119,42 @@ func TestExtractCommonRedistsUsesDepotIDNames(t *testing.T) {
 	want := []string{"vcrun2022", "d3dx9", "d3dcompiler_43", "xact", "dotnet48"}
 	if !reflect.DeepEqual(verbs, want) {
 		t.Fatalf("verbs = %#v, want %#v", verbs, want)
+	}
+}
+
+func TestVerbsForRedistPrefersDepotIDMapping(t *testing.T) {
+	tests := map[string]struct {
+		redist SteamRedist
+		want   []string
+	}{
+		"vc2022": {
+			redist: SteamRedist{DepotID: "228989", Name: "unexpected display name"},
+			want:   []string{"vcrun2022"},
+		},
+		"directx": {
+			redist: SteamRedist{DepotID: "228990"},
+			want:   []string{"d3dx9", "d3dcompiler_43", "xact"},
+		},
+		"dotnet35": {
+			redist: SteamRedist{DepotID: "229000"},
+			want:   []string{"dotnet35"},
+		},
+		"xna30": {
+			redist: SteamRedist{DepotID: "229010"},
+			want:   nil,
+		},
+		"fallback": {
+			redist: SteamRedist{DepotID: "999999", Name: "OpenAL Redist"},
+			want:   []string{"openal"},
+		},
+	}
+
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			if got := VerbsForRedist(test.redist); !reflect.DeepEqual(got, test.want) {
+				t.Fatalf("VerbsForRedist(%#v) = %#v, want %#v", test.redist, got, test.want)
+			}
+		})
 	}
 }
 
@@ -151,6 +187,7 @@ func TestVerbsForRedistName(t *testing.T) {
 		"DirectX Jun 2010 Redist":                   {"d3dx9", "d3dcompiler_43", "xact"},
 		"Microsoft .NET Framework 4.8":              {"dotnet48"},
 		"OpenAL Redist":                             {"openal"},
+		"Microsoft XNA Framework 3.0":               nil,
 		"Microsoft XNA Framework 4.0":               {"xna40"},
 		"NVIDIA PhysX Legacy":                       {"physx"},
 		"Totally Custom Middleware":                 nil,
