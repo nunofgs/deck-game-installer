@@ -48,7 +48,7 @@ func TestIdentifySteamAppFromManifest(t *testing.T) {
 	}
 }
 
-func TestIdentifySteamAppFromAppList(t *testing.T) {
+func TestStoreSearchCandidates(t *testing.T) {
 	dir := t.TempDir()
 	exe := touchFile(t, filepath.Join(dir, "Puzzle-Agent-2.exe"))
 	apps := []AppListEntry{
@@ -56,12 +56,15 @@ func TestIdentifySteamAppFromAppList(t *testing.T) {
 		{AppID: 94590, Name: "Puzzle Agent 2"},
 	}
 
-	ident, err := NewIdentifierForTest(t.TempDir(), apps).Identify(context.Background(), exe)
+	candidates, err := NewIdentifierForTest(t.TempDir(), apps).StoreSearchCandidates(context.Background(), exe, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if ident.AppID != 94590 {
-		t.Fatalf("identity = %#v, want app 94590", ident)
+	if len(candidates) != 2 {
+		t.Fatalf("candidate count = %d, want 2: %#v", len(candidates), candidates)
+	}
+	if candidates[0].AppID != 94590 {
+		t.Fatalf("first candidate = %#v, want app 94590", candidates[0])
 	}
 }
 
@@ -81,7 +84,7 @@ func TestIdentifySteamAppUsesHints(t *testing.T) {
 	}
 }
 
-func TestIdentifySteamAppSkipsAmbiguousAppListMatch(t *testing.T) {
+func TestIdentifySteamAppSkipsAmbiguousStoreSearchMatch(t *testing.T) {
 	dir := t.TempDir()
 	exe := touchFile(t, filepath.Join(dir, "Doom.exe"))
 	apps := []AppListEntry{

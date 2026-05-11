@@ -24,13 +24,12 @@ func (s *InstallSteamRedists) Execute(ctx context.Context, state *State) error {
 	}
 
 	state.UI.Log("Identifying matching Steam app...")
-	identity, err := steammeta.NewIdentifier().IdentifyWithHints(ctx, source, []string{state.GameName})
+	identity, err := s.identifySteamApp(ctx, state, source)
 	if err != nil {
-		state.UI.Log("Steam metadata not identified: " + err.Error())
-		return nil
+		return err
 	}
-	if identity.AppID == 0 || identity.Confidence < 0.92 {
-		state.UI.Log("Steam metadata not identified with high confidence; skipping redists.")
+	if identity.AppID == 0 {
+		state.UI.Log("Steam metadata not identified; skipping redists.")
 		return nil
 	}
 
@@ -89,6 +88,44 @@ func (s *InstallSteamRedists) Execute(ctx context.Context, state *State) error {
 			return nil
 		}
 	}
+}
+
+func (s *InstallSteamRedists) identifySteamApp(ctx context.Context, state *State, source string) (steammeta.Identification, error) {
+	identifier := steammeta.NewIdentifier()
+
+	if identity, ok, err := identifier.IdentifyLocal(source); err != nil || ok {
+		return identity, err
+	}
+
+	candidates, err := identifier.StoreSearchCandidates(ctx, source, []string{state.GameName})
+	if err != nil {
+		state.UI.Log("Steam Store search failed: " + err.Error())
+		return steammeta.Identification{}, nil
+	}
+	switch len(candidates) {
+	case 0:
+		return steammeta.Identification{}, nil
+	case 1:
+		return candidates[0], nil
+	}
+
+	options := make([]string, len(candidates))
+	byOption := make(map[string]steammeta.Identification, len(candidates))
+	for i, candidate := range candidates {
+		option := fmt.Sprintf("%s (AppID %d)", candidate.Name, candidate.AppID)
+		options[i] = option
+		byOption[option] = candidate
+	}
+
+	selected, ok := state.UI.Select(
+		"Select Steam App",
+		"Multiple Steam Store results matched this game. Select the Steam app to use for redistributables:",
+		options,
+	)
+	if !ok {
+		return steammeta.Identification{}, fmt.Errorf("Steam app selection cancelled")
+	}
+	return byOption[selected], nil
 }
 
 func redistSourcePath(state *State) string {

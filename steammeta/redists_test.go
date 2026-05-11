@@ -2,6 +2,8 @@ package steammeta
 
 import (
 	"context"
+	"net/http"
+	"net/http/httptest"
 	"reflect"
 	"testing"
 )
@@ -93,6 +95,50 @@ func TestResolveCommonRedistsAddsVerbs(t *testing.T) {
 	want := []string{"vcrun2022", "dotnet48"}
 	if !reflect.DeepEqual(verbs, want) {
 		t.Fatalf("verbs = %#v, want %#v", verbs, want)
+	}
+}
+
+func TestExtractCommonRedistsUsesDepotIDNames(t *testing.T) {
+	app := map[string]any{
+		"depots": map[string]any{
+			"228989": map[string]any{"depotfromapp": "228980", "sharedinstall": "1"},
+			"228990": map[string]any{"depotfromapp": "228980", "sharedinstall": "1"},
+			"229007": map[string]any{"depotfromapp": "228980", "sharedinstall": "1"},
+		},
+	}
+	common := map[string]any{
+		"depots": map[string]any{
+			"228989": map[string]any{},
+			"228990": map[string]any{},
+			"229007": map[string]any{},
+		},
+	}
+
+	redists := ExtractCommonRedists(app, common)
+	verbs := WinetricksVerbs(redists)
+	want := []string{"vcrun2022", "d3dx9", "d3dcompiler_43", "xact", "dotnet48"}
+	if !reflect.DeepEqual(verbs, want) {
+		t.Fatalf("verbs = %#v, want %#v", verbs, want)
+	}
+}
+
+func TestSteamCMDNetProvider(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/info/2582320" {
+			t.Fatalf("path = %q", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"data":{"2582320":{"appid":"2582320","depots":{"228989":{"depotfromapp":"228980","sharedinstall":"1"}}}},"status":"success"}`)) //nolint:errcheck
+	}))
+	defer server.Close()
+
+	provider := &SteamCMDNetProvider{baseURL: server.URL + "/v1/info/", client: server.Client()}
+	app, err := provider.AppInfo(context.Background(), 2582320)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if app["appid"] != "2582320" {
+		t.Fatalf("appid = %#v", app["appid"])
 	}
 }
 

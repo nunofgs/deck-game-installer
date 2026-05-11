@@ -32,6 +32,12 @@ type AppListEntry struct {
 	Name  string
 }
 
+type storeMatch struct {
+	app   AppListEntry
+	score float64
+	name  string
+}
+
 // Identifier identifies the Steam app that most likely matches a local path.
 type Identifier struct {
 	steamPath string
@@ -70,9 +76,25 @@ func (i *Identifier) Identify(ctx context.Context, path string) (Identification,
 // IdentifyWithHints resolves the likely Steam app for path, using extra names
 // such as an ISO-derived game title when filename/path clues are weak.
 func (i *Identifier) IdentifyWithHints(ctx context.Context, path string, hints []string) (Identification, error) {
-	root, err := identityRoot(path)
+	if ident, ok, err := i.IdentifyLocal(path); err != nil || ok {
+		return ident, err
+	}
+
+	candidates, err := i.StoreSearchCandidates(ctx, path, hints)
 	if err != nil {
 		return Identification{}, err
+	}
+	if len(candidates) != 1 {
+		return Identification{}, nil
+	}
+	return candidates[0], nil
+}
+
+// IdentifyLocal resolves a Steam app without network access.
+func (i *Identifier) IdentifyLocal(path string) (Identification, bool, error) {
+	root, err := identityRoot(path)
+	if err != nil {
+		return Identification{}, false, err
 	}
 
 	if appID, from := readSteamAppID(root); appID != 0 {
@@ -80,14 +102,14 @@ func (i *Identifier) IdentifyWithHints(ctx context.Context, path string, hints [
 			AppID:      appID,
 			Confidence: 1,
 			Reason:     "found " + from,
-		}, nil
+		}, true, nil
 	}
 
 	if ident, ok := i.identifyFromManifest(path); ok {
-		return ident, nil
+		return ident, true, nil
 	}
 
-	return i.identifyFromStoreSearch(ctx, path, root, hints)
+	return Identification{}, false, nil
 }
 
 func identityRoot(path string) (string, error) {
@@ -207,23 +229,24 @@ func (i *Identifier) steamAppsDirs() []string {
 	return dedupeStrings(paths)
 }
 
-func (i *Identifier) identifyFromStoreSearch(ctx context.Context, path, root string, hints []string) (Identification, error) {
+// StoreSearchCandidates returns Steam Store search candidates for a local game.
+func (i *Identifier) StoreSearchCandidates(ctx context.Context, path string, hints []string) ([]Identification, error) {
+	root, err := identityRoot(path)
+	if err != nil {
+		return nil, err
+	}
+
 	names := append(candidateNames(path, root), hints...)
 	names = cleanCandidateNames(names)
 	if len(names) == 0 {
-		return Identification{}, nil
+		return nil, nil
 	}
 
-	type match struct {
-		app   AppListEntry
-		score float64
-		name  string
-	}
-	var matches []match
+	var matches []storeMatch
 	for _, candidate := range names {
 		apps, err := i.searchApps(ctx, candidate)
 		if err != nil {
-			return Identification{}, err
+			return nil, err
 		}
 		for _, app := range apps {
 			if app.Name == "" {
@@ -233,33 +256,40 @@ func (i *Identifier) identifyFromStoreSearch(ctx context.Context, path, root str
 			if score <= 0 {
 				continue
 			}
-			matches = append(matches, match{app: app, score: score, name: candidate})
+			matches = append(matches, storeMatch{app: app, score: score, name: candidate})
 		}
 	}
+	matches = dedupeMatches(matches)
 	sort.Slice(matches, func(a, b int) bool {
 		if matches[a].score == matches[b].score {
 			return matches[a].app.AppID < matches[b].app.AppID
 		}
 		return matches[a].score > matches[b].score
 	})
-	if len(matches) == 0 {
-		return Identification{}, nil
+	out := make([]Identification, 0, len(matches))
+	for _, match := range matches {
+		out = append(out, Identification{
+			AppID:      match.app.AppID,
+			Name:       match.app.Name,
+			Confidence: match.score,
+			Reason:     fmt.Sprintf("matched Steam Store search name %q", match.name),
+		})
 	}
+	return out, nil
+}
 
-	top := matches[0]
-	second := 0.0
-	if len(matches) > 1 {
-		second = matches[1].score
+func dedupeMatches(matches []storeMatch) []storeMatch {
+	best := map[int]storeMatch{}
+	for _, m := range matches {
+		if existing, ok := best[m.app.AppID]; !ok || m.score > existing.score {
+			best[m.app.AppID] = m
+		}
 	}
-	if top.score < 0.92 || top.score-second < 0.05 {
-		return Identification{}, nil
+	out := make([]storeMatch, 0, len(best))
+	for _, m := range best {
+		out = append(out, m)
 	}
-	return Identification{
-		AppID:      top.app.AppID,
-		Name:       top.app.Name,
-		Confidence: top.score,
-		Reason:     fmt.Sprintf("matched Steam Store search name %q", top.name),
-	}, nil
+	return out
 }
 
 func (i *Identifier) searchApps(ctx context.Context, term string) ([]AppListEntry, error) {
