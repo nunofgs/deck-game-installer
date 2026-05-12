@@ -357,6 +357,29 @@ func (m *Manager) StartSteam(args ...string) error {
 	return nil
 }
 
+// WaitForSteamReady polls until the Steam process is running and has had time
+// to load shortcuts.vdf. This must be called after StartSteam.
+func (m *Manager) WaitForSteamReady(ctx context.Context) error {
+	ticker := time.NewTicker(500 * time.Millisecond)
+	defer ticker.Stop()
+	timeout := time.After(60 * time.Second)
+
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-timeout:
+			return errors.New("timeout waiting for Steam to start")
+		case <-ticker.C:
+			if exec.Command("pgrep", "-x", "steam").Run() == nil {
+				// Steam process found; give it time to load shortcuts.vdf.
+				time.Sleep(5 * time.Second)
+				return nil
+			}
+		}
+	}
+}
+
 // waitForSteamShutdown polls until the steam process is no longer running.
 func (m *Manager) waitForSteamShutdown(ctx context.Context) error {
 	ticker := time.NewTicker(300 * time.Millisecond)

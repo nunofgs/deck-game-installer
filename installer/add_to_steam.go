@@ -8,19 +8,24 @@ import (
 	"unicode"
 )
 
-// AddToSteam creates a Steam shortcut for the installer.
+// AddToSteam creates a Steam shortcut for the installer or portable game.
 type AddToSteam struct {
+	installer bool
 }
 
-func NewAddToSteam() *AddToSteam { return &AddToSteam{} }
-func (s *AddToSteam) Name() string { return "Add to Steam" }
+func NewAddToSteam() *AddToSteam     { return &AddToSteam{installer: true} }
+func NewAddGameToSteam() *AddToSteam { return &AddToSteam{} }
+func (s *AddToSteam) Name() string   { return "Add to Steam" }
 
 func (s *AddToSteam) Execute(ctx context.Context, state *State) error {
 	if state.GameName == "" {
 		state.GameName = DeriveGameName(state.InstallerPath)
 	}
 
-	appName := state.GameName + " (Installer)"
+	appName := state.GameName
+	if s.installer {
+		appName += " (Installer)"
+	}
 	startDir := filepath.Dir(state.InstallerPath)
 
 	state.UI.Log("Creating Steam shortcut: " + appName)

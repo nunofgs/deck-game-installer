@@ -78,6 +78,7 @@ func (t *TeeLogger) Confirm(title, message string) bool {
 	return result
 }
 
+
 func (t *TeeLogger) Select(title, prompt string, options []string) (string, bool) {
 	t.writeLine(fmt.Sprintf("[SELECT] %s — %s — options: %v", title, prompt, options))
 	result, ok := t.inner.Select(title, prompt, options)

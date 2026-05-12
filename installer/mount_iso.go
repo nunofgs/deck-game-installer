@@ -55,9 +55,9 @@ func gameNameFromPath(isoPath, _ string) string {
 	return cleanGameName(name)
 }
 
-// cleanGameName cleans up a game name by replacing underscores/dots with spaces.
+// cleanGameName cleans up a game name by replacing separators with spaces.
 func cleanGameName(name string) string {
-	replacer := strings.NewReplacer("_", " ", ".", " ")
+	replacer := strings.NewReplacer("_", " ", ".", " ", "-", " ")
 	clean := replacer.Replace(name)
 	clean = strings.TrimSpace(clean)
 	if clean == "" {

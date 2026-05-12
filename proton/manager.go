@@ -91,6 +91,39 @@ func (m *Manager) prefixRoot(appID int32) string {
 	return filepath.Join(m.compatDataPath, strconv.FormatUint(uint64(uint32(appID)), 10), "pfx")
 }
 
+// PrefixRoot returns the pfx directory for a given app ID.
+func (m *Manager) PrefixRoot(appID int32) string {
+	return m.prefixRoot(appID)
+}
+
+// ProtonDirectory returns the installation directory for a Proton version by
+// its internal name (e.g. "proton_9", "proton-experimental").
+// Returns an empty string if the version cannot be found.
+func (m *Manager) ProtonDirectory(version string) string {
+	for _, base := range []string{m.commonPath, m.compatToolsPath} {
+		entries, err := os.ReadDir(base)
+		if err != nil {
+			continue
+		}
+		for _, e := range entries {
+			if !e.IsDir() {
+				continue
+			}
+			dir := filepath.Join(base, e.Name())
+			vdfPath := filepath.Join(dir, "compatibilitytool.vdf")
+			if data, err := os.ReadFile(vdfPath); err == nil {
+				if internalNameFromVDF(string(data)) == version {
+					return dir
+				}
+			}
+			if folderToInternalName(e.Name()) == version {
+				return dir
+			}
+		}
+	}
+	return ""
+}
+
 // PrefixPath returns the drive_c path inside the Proton prefix for a given app ID.
 func (m *Manager) PrefixPath(appID int32) string {
 	return filepath.Join(m.prefixRoot(appID), "drive_c")

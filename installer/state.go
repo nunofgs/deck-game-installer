@@ -13,6 +13,7 @@ import (
 type State struct {
 	// Input
 	InputPath string // Original path (ISO, SMB, or EXE)
+	InputMode InputMode
 	GameName  string // Derived or user-provided game name
 
 	// Mount state
