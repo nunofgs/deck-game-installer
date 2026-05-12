@@ -2,6 +2,7 @@ package installer
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os/exec"
 	"strings"
@@ -10,16 +11,18 @@ import (
 	"deck-game-installer/steammeta"
 )
 
+var errInstallationCancelled = errors.New("installation cancelled")
+
 // InstallSteamRedists installs Steam-declared common redistributables into the shortcut prefix.
 type InstallSteamRedists struct{}
 
 func NewInstallSteamRedists() *InstallSteamRedists { return &InstallSteamRedists{} }
-func (s *InstallSteamRedists) Name() string        { return "Install Redists" }
+func (s *InstallSteamRedists) Name() string        { return "Install Redistributables" }
 
 func (s *InstallSteamRedists) Execute(ctx context.Context, state *State) error {
 	source := redistSourcePath(state)
 	if source == "" {
-		state.UI.Log("No source path available for Steam metadata lookup; skipping redists.")
+		state.UI.Log("No source path available for Steam metadata lookup; skipping redistributables.")
 		return nil
 	}
 
@@ -29,7 +32,7 @@ func (s *InstallSteamRedists) Execute(ctx context.Context, state *State) error {
 		return err
 	}
 	if identity.AppID == 0 {
-		state.UI.Log("Steam metadata not identified; skipping redists.")
+		state.UI.Log("Steam metadata not identified; skipping redistributables.")
 		return nil
 	}
 
@@ -42,7 +45,7 @@ func (s *InstallSteamRedists) Execute(ctx context.Context, state *State) error {
 	state.UI.Log("Fetching Steam common redistributables from appinfo...")
 	redists, err := steammeta.ResolveCommonRedists(ctx, identity.AppID)
 	if err != nil {
-		state.UI.Log("Could not fetch Steam redist metadata: " + err.Error())
+		state.UI.Log("Could not fetch Steam redistributable metadata: " + err.Error())
 		return nil
 	}
 	if len(redists) == 0 {
@@ -52,21 +55,28 @@ func (s *InstallSteamRedists) Execute(ctx context.Context, state *State) error {
 
 	for _, item := range redists {
 		if len(item.Verbs) == 0 {
-			state.UI.Log(fmt.Sprintf("Redist %s (%s) has no winetricks mapping; skipping it.", item.Name, item.DepotID))
+			state.UI.Log(fmt.Sprintf("Redistributable %s (%s) has no winetricks mapping; skipping it.", item.Name, item.DepotID))
 			continue
 		}
-		state.UI.Log(fmt.Sprintf("Redist %s (%s) -> %s", item.Name, item.DepotID, strings.Join(item.Verbs, ", ")))
+		state.UI.Log(fmt.Sprintf("Redistributable %s (%s) -> %s", item.Name, item.DepotID, strings.Join(item.Verbs, ", ")))
 	}
 
 	verbs := steammeta.WinetricksVerbs(redists)
 	if len(verbs) == 0 {
-		state.UI.Log("No installable winetricks verbs were resolved from Steam redists.")
+		state.UI.Log("No installable winetricks verbs resolved from Steam redistributables.")
 		return nil
 	}
 
+	protonDir := state.Proton.ProtonDirectory(state.ProtonVersion)
+	prefixRoot := state.Proton.PrefixRoot(state.AppID)
+	if protonDir != "" {
+		state.UI.Log(fmt.Sprintf("Proton binary: %s (%s)", state.ProtonVersion, protonDir))
+	}
+	state.UI.Log("Game prefix: " + prefixRoot)
+
 	installer := redist.NewInstaller()
 	for {
-		err := installer.InstallRedists(ctx, state.AppID, state.Proton.PrefixRoot(state.AppID), verbs, state.UI.Log)
+		err := installer.InstallRedists(ctx, state.AppID, prefixRoot, protonDir, verbs, state.UI.Log)
 		if err == nil {
 			state.UI.Log("Redistributables installed.")
 			return nil
@@ -78,12 +88,21 @@ func (s *InstallSteamRedists) Execute(ctx context.Context, state *State) error {
 			}
 			continue
 		}
+		if isFlatpakPermissionError(err) {
+			if !s.handleFlatpakPermission(state, err) {
+				return nil
+			}
+			continue
+		}
 		choice, ok := state.UI.Select(
-			"Redist Installation Failed",
+			"Redistributable Installation Failed",
 			"Could not install the Steam redistributables:\n\n"+err.Error(),
-			[]string{"Retry", "Skip Dependencies"},
+			[]string{"Retry", "Skip Dependencies", "Cancel"},
 		)
-		if !ok || choice != "Retry" {
+		if !ok || choice == "Cancel" {
+			return errInstallationCancelled
+		}
+		if choice == "Skip Dependencies" {
 			state.UI.Log("Skipping redistributable installation after failure.")
 			return nil
 		}
@@ -97,11 +116,25 @@ func (s *InstallSteamRedists) identifySteamApp(ctx context.Context, state *State
 		return identity, err
 	}
 
-	candidates, err := identifier.StoreSearchCandidates(ctx, source, []string{state.GameName})
-	if err != nil {
+	var candidates []steammeta.Identification
+	for {
+		var err error
+		candidates, err = identifier.StoreSearchCandidates(ctx, source, []string{state.GameName})
+		if err == nil {
+			break
+		}
 		state.UI.Log("Steam Store search failed: " + err.Error())
-		return steammeta.Identification{}, nil
+		choice, ok := state.UI.Select(
+			"Steam Store Search Failed",
+			"Could not search the Steam Store:\n\n"+err.Error(),
+			[]string{"Retry", "Skip"},
+		)
+		if !ok || choice == "Skip" {
+			state.UI.Log("Skipping redistributable installation.")
+			return steammeta.Identification{}, nil
+		}
 	}
+
 	switch len(candidates) {
 	case 0:
 		return steammeta.Identification{}, nil
@@ -123,7 +156,7 @@ func (s *InstallSteamRedists) identifySteamApp(ctx context.Context, state *State
 		options,
 	)
 	if !ok {
-		return steammeta.Identification{}, fmt.Errorf("Steam app selection cancelled")
+		return steammeta.Identification{}, errInstallationCancelled
 	}
 	return byOption[selected], nil
 }
@@ -143,7 +176,7 @@ func (s *InstallSteamRedists) handleMissingTool(state *State, cause error) bool 
 	for {
 		choice, ok := state.UI.Select(
 			"Install Protontricks",
-			"Steam redists were found, but dependency installation needs Protontricks.\n\n"+
+			"Steam redistributables were found, but dependency installation needs Protontricks.\n\n"+
 				"Reason: "+cause.Error()+"\n\n"+
 				"Install Protontricks from Discover/Flathub, then choose Retry.",
 			[]string{"Open Protontricks in Discover", "Retry", "Skip Dependencies"},
@@ -156,6 +189,43 @@ func (s *InstallSteamRedists) handleMissingTool(state *State, cause error) bool 
 		}
 		openProtontricksPage(state)
 	}
+}
+
+func isFlatpakPermissionError(err error) bool {
+	return strings.Contains(err.Error(), "does not appear to have access to")
+}
+
+func (s *InstallSteamRedists) handleFlatpakPermission(state *State, cause error) bool {
+	grantCmd := flatpakOverrideCmd(cause.Error())
+
+	for {
+		choice, ok := state.UI.Select(
+			"Protontricks Needs Filesystem Access",
+			"Protontricks does not have permission to access your Steam directory.\n\n"+
+				"Click \"Grant Access\" to fix this automatically, then the installation will continue.",
+			[]string{"Grant Access", "Skip Dependencies"},
+		)
+		if !ok || choice == "Skip Dependencies" {
+			state.UI.Log("Skipping redistributable installation.")
+			return false
+		}
+		parts := strings.Fields(grantCmd)
+		if out, err := exec.Command(parts[0], parts[1:]...).CombinedOutput(); err != nil {
+			state.UI.Log("Could not grant Flatpak access: " + err.Error() + ": " + strings.TrimSpace(string(out)))
+			continue
+		}
+		state.UI.Log("Granted Flatpak filesystem access.")
+		return true
+	}
+}
+
+func flatpakOverrideCmd(errMsg string) string {
+	for _, line := range strings.Split(errMsg, "\n") {
+		if strings.HasPrefix(strings.TrimSpace(line), "flatpak override") {
+			return strings.TrimSpace(line)
+		}
+	}
+	return "flatpak override --user --filesystem=home"
 }
 
 func openProtontricksPage(state *State) {

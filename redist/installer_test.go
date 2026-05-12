@@ -24,7 +24,7 @@ func TestInstallRedistsUsesProtontricksAndCreatesPrefix(t *testing.T) {
 		},
 	)
 
-	err := installer.InstallRedists(context.Background(), int32(-1), filepath.Join(t.TempDir(), "pfx"), []string{"vcrun2022", "d3dx9"}, func(string) {})
+	err := installer.InstallRedists(t.Context(), int32(-1), filepath.Join(t.TempDir(), "pfx"), "", []string{"vcrun2022", "d3dx9"}, func(string) {})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -59,7 +59,7 @@ func TestInstallRedistsFallsBackToWinetricksForExistingPrefix(t *testing.T) {
 		},
 	)
 
-	err := installer.InstallRedists(context.Background(), 42, prefix, []string{"vcrun2022"}, func(string) {})
+	err := installer.InstallRedists(t.Context(), 42, prefix, "", []string{"vcrun2022"}, func(string) {})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -77,7 +77,7 @@ func TestInstallRedistsReportsMissingTools(t *testing.T) {
 		func(ctx context.Context, name string, args []string, env []string) ([]byte, error) { return nil, nil },
 	)
 
-	err := installer.InstallRedists(context.Background(), 42, filepath.Join(t.TempDir(), "pfx"), []string{"vcrun2022"}, func(string) {})
+	err := installer.InstallRedists(t.Context(), 42, filepath.Join(t.TempDir(), "pfx"), "", []string{"vcrun2022"}, func(string) {})
 	if !IsMissingTool(err) {
 		t.Fatalf("err = %v, want MissingToolError", err)
 	}

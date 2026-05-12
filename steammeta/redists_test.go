@@ -87,7 +87,7 @@ func TestResolveCommonRedistsAddsVerbs(t *testing.T) {
 		},
 	}
 
-	redists, err := NewRedistResolverWithProvider(provider).Resolve(context.Background(), 123)
+	redists, err := NewRedistResolverWithProvider(provider).Resolve(t.Context(), 123)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -169,7 +169,7 @@ func TestSteamCMDNetProvider(t *testing.T) {
 	defer server.Close()
 
 	provider := &SteamCMDNetProvider{baseURL: server.URL + "/v1/info/", client: server.Client()}
-	app, err := provider.AppInfo(context.Background(), 2582320)
+	app, err := provider.AppInfo(t.Context(), 2582320)
 	if err != nil {
 		t.Fatal(err)
 	}

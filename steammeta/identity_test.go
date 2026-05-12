@@ -1,7 +1,6 @@
 package steammeta
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -14,7 +13,7 @@ func TestIdentifySteamAppFromSteamAppID(t *testing.T) {
 	}
 	exe := touchFile(t, filepath.Join(dir, "Game.exe"))
 
-	ident, err := NewIdentifierForTest(t.TempDir(), nil).Identify(context.Background(), exe)
+	ident, err := NewIdentifierForTest(t.TempDir(), nil).Identify(t.Context(), exe)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -39,7 +38,7 @@ func TestIdentifySteamAppFromManifest(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	ident, err := NewIdentifierForTest(steamPath, nil).Identify(context.Background(), exe)
+	ident, err := NewIdentifierForTest(steamPath, nil).Identify(t.Context(), exe)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -56,7 +55,7 @@ func TestStoreSearchCandidates(t *testing.T) {
 		{AppID: 94590, Name: "Puzzle Agent 2"},
 	}
 
-	candidates, err := NewIdentifierForTest(t.TempDir(), apps).StoreSearchCandidates(context.Background(), exe, nil)
+	candidates, err := NewIdentifierForTest(t.TempDir(), apps).StoreSearchCandidates(t.Context(), exe, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -75,7 +74,7 @@ func TestIdentifySteamAppUsesHints(t *testing.T) {
 		{AppID: 345, Name: "Excellent Game"},
 	}
 
-	ident, err := NewIdentifierForTest(t.TempDir(), apps).IdentifyWithHints(context.Background(), exe, []string{"Excellent Game"})
+	ident, err := NewIdentifierForTest(t.TempDir(), apps).IdentifyWithHints(t.Context(), exe, []string{"Excellent Game"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -92,7 +91,7 @@ func TestIdentifySteamAppSkipsAmbiguousStoreSearchMatch(t *testing.T) {
 		{AppID: 2, Name: "Doom"},
 	}
 
-	ident, err := NewIdentifierForTest(t.TempDir(), apps).Identify(context.Background(), exe)
+	ident, err := NewIdentifierForTest(t.TempDir(), apps).Identify(t.Context(), exe)
 	if err != nil {
 		t.Fatal(err)
 	}

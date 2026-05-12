@@ -194,18 +194,49 @@ func NewSteamCMDProvider() *SteamCMDProvider {
 	return &SteamCMDProvider{path: findSteamCMD()}
 }
 
-// AppInfo fetches and parses appinfo for one app.
+// AppInfo fetches and parses appinfo for one app, using a per-app cache to
+// avoid repeated full-database steamcmd updates.
 func (p *SteamCMDProvider) AppInfo(ctx context.Context, appID int) (map[string]any, error) {
 	if p.path == "" {
 		return nil, fmt.Errorf("steamcmd not found")
 	}
+
+	if cached, ok := loadAppInfoCache(appID); ok {
+		return cached, nil
+	}
+
+	app, err := p.fetchAppInfo(ctx, appID)
+	if err != nil {
+		return nil, err
+	}
+	saveAppInfoCache(appID, app)
+	return app, nil
+}
+
+// fetchAppInfo runs steamcmd to fetch appinfo for a single app.
+// It tries a fast path (no update) first; if the app is missing from the local
+// cache it falls back to a full app_info_update and retries.
+func (p *SteamCMDProvider) fetchAppInfo(ctx context.Context, appID int) (map[string]any, error) {
+	// Fast path: use whatever steamcmd already has cached locally.
+	if app, err := p.runAppInfoPrint(ctx, appID, false); err == nil {
+		return app, nil
+	}
+
+	// Slow path: force a full update so steamcmd fetches this app's depot data.
+	// This can take several minutes on first run — it downloads the entire Steam
+	// app database. The result is cached above so this only happens once per app.
+	return p.runAppInfoPrint(ctx, appID, true)
+}
+
+func (p *SteamCMDProvider) runAppInfoPrint(ctx context.Context, appID int, forceUpdate bool) (map[string]any, error) {
+	var script string
+	if forceUpdate {
+		script = "login anonymous\napp_info_update 1\napp_info_print " + strconv.Itoa(appID) + "\nquit\n"
+	} else {
+		script = "login anonymous\napp_info_print " + strconv.Itoa(appID) + "\nquit\n"
+	}
 	cmd := exec.CommandContext(ctx, p.path)
-	cmd.Stdin = strings.NewReader(
-		"login anonymous\n" +
-			"app_info_update 1\n" +
-			"app_info_print " + strconv.Itoa(appID) + "\n" +
-			"quit\n",
-	)
+	cmd.Stdin = strings.NewReader(script)
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	cmd.Stderr = &out
@@ -221,6 +252,45 @@ func (p *SteamCMDProvider) AppInfo(ctx context.Context, appID int) (map[string]a
 		return nil, fmt.Errorf("steamcmd output did not contain app %d", appID)
 	}
 	return app, nil
+}
+
+func appInfoCachePath(appID int) string {
+	cacheDir, err := os.UserCacheDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(cacheDir, "deck-game-installer", "appinfo", strconv.Itoa(appID)+".json")
+}
+
+func loadAppInfoCache(appID int) (map[string]any, bool) {
+	path := appInfoCachePath(appID)
+	if path == "" {
+		return nil, false
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, false
+	}
+	var result map[string]any
+	if err := json.Unmarshal(data, &result); err != nil {
+		return nil, false
+	}
+	return result, len(result) > 0
+}
+
+func saveAppInfoCache(appID int, info map[string]any) {
+	path := appInfoCachePath(appID)
+	if path == "" {
+		return
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return
+	}
+	data, err := json.Marshal(info)
+	if err != nil {
+		return
+	}
+	_ = os.WriteFile(path, data, 0o644)
 }
 
 func findSteamCMD() string {

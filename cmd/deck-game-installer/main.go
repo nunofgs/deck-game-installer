@@ -18,6 +18,16 @@ import (
 )
 
 func main() {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		<-sigCh
+		cancel()
+	}()
+
 	if len(os.Args) < 2 {
 		printUsage()
 		os.Exit(1)
@@ -27,7 +37,7 @@ func main() {
 	case "help", "-h", "--help":
 		printUsage()
 	default:
-		runInstall(os.Args[1])
+		runInstall(ctx, os.Args[1])
 	}
 }
 
@@ -44,18 +54,7 @@ func printUsage() {
 	fmt.Println("  deck-game-installer smb://server/share/game.iso")
 }
 
-func runInstall(path string) {
-	// Set up context with cancellation on SIGINT/SIGTERM
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
-	go func() {
-		<-sigCh
-		cancel()
-	}()
-
+func runInstall(ctx context.Context, path string) {
 	filename := filepath.Base(path)
 	guiLogger := ui.NewGUILogger("Deck Game Installer", filename)
 	logger := ui.NewTeeLogger(guiLogger)
@@ -112,7 +111,9 @@ func runSelectedPipeline(ctx context.Context, state *installer.State) error {
 				installer.NewShutdownSteam(),
 				installer.NewAddToSteam(),
 				installer.NewConfigureProton(),
+				installer.NewStartSteamForRedists(),
 				installer.NewInstallSteamRedists(),
+				installer.NewShutdownSteam(),
 				installer.NewRunInstaller(),
 				installer.NewWaitForExit(),
 				installer.NewFindGame(),
@@ -129,7 +130,9 @@ func runSelectedPipeline(ctx context.Context, state *installer.State) error {
 			installer.NewShutdownSteam(),
 			installer.NewAddToSteam(),
 			installer.NewConfigureProton(),
+			installer.NewStartSteamForRedists(),
 			installer.NewInstallSteamRedists(),
+			installer.NewShutdownSteam(),
 			installer.NewRunInstaller(),
 			installer.NewWaitForExit(),
 			installer.NewFindGame(),
@@ -144,6 +147,7 @@ func runSelectedPipeline(ctx context.Context, state *installer.State) error {
 			installer.NewShutdownSteam(),
 			installer.NewAddGameToSteam(),
 			installer.NewConfigureProton(),
+			installer.NewStartSteamForRedists(),
 			installer.NewInstallSteamRedists(),
 			installer.NewFinalRestart(),
 		)

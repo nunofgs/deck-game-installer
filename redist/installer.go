@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 )
@@ -47,13 +48,27 @@ func NewInstallerForTest(lookPath func(string) (string, error), run CommandRunne
 }
 
 // InstallRedists installs verbs into the shortcut's Proton prefix.
-func (i *Installer) InstallRedists(ctx context.Context, appID int32, prefixRoot string, verbs []string, log func(string)) error {
+// protonDir is the installation directory of the configured Proton version.
+// When non-empty and winetricks is available, winetricks is run with Proton's
+// wine binary directly, bypassing protontricks' app-ID lookup (which fails for
+// non-Steam shortcuts with CRC-based app IDs).
+func (i *Installer) InstallRedists(ctx context.Context, appID int32, prefixRoot string, protonDir string, verbs []string, log func(string)) error {
 	verbs = dedupe(verbs)
 	if len(verbs) == 0 {
 		return nil
 	}
-	appIDText := strconv.FormatUint(uint64(uint32(appID)), 10)
 
+	// Prefer winetricks + Proton wine when we have a known prefix and Proton dir.
+	if protonDir != "" {
+		if winetricks, err := i.lookPath("winetricks"); err == nil {
+			wineBin := protonWineBinary(protonDir)
+			return i.runWithWinetricks(ctx, winetricks, wineBin, prefixRoot, verbs, log)
+		}
+	}
+
+	// Fall back to protontricks (works for Steam store apps; may fail for
+	// non-Steam shortcuts if protontricks can't resolve the CRC app ID).
+	appIDText := strconv.FormatUint(uint64(uint32(appID)), 10)
 	if protontricks, err := i.lookPath("protontricks"); err == nil {
 		if _, err := os.Stat(prefixRoot); err != nil {
 			log("Creating Proton prefix with protontricks...")
@@ -62,13 +77,14 @@ func (i *Installer) InstallRedists(ctx context.Context, appID int32, prefixRoot 
 			}
 		}
 		args := append([]string{appIDText}, verbs...)
-		log("Installing redists with protontricks: " + strings.Join(verbs, ", "))
+		log("Installing redistributables with protontricks: " + strings.Join(verbs, ", "))
 		if out, err := i.run(ctx, protontricks, args, nil); err != nil {
 			return fmt.Errorf("protontricks failed: %w: %s", err, strings.TrimSpace(string(out)))
 		}
 		return nil
 	}
 
+	// Last resort: winetricks without Proton wine (prefix must already exist).
 	winetricks, err := i.lookPath("winetricks")
 	if err != nil {
 		return &MissingToolError{Reason: "protontricks is not installed"}
@@ -76,13 +92,37 @@ func (i *Installer) InstallRedists(ctx context.Context, appID int32, prefixRoot 
 	if _, err := os.Stat(prefixRoot); err != nil {
 		return &MissingToolError{Reason: "winetricks is installed, but the Proton prefix does not exist yet; protontricks is needed to create it safely"}
 	}
+	return i.runWithWinetricks(ctx, winetricks, "", prefixRoot, verbs, log)
+}
 
+// runWithWinetricks runs winetricks verbs with WINEPREFIX set to prefixRoot.
+// When wineBin is non-empty, WINE is also set. The prefix directory is created
+// if absent so wine can chdir into it; winetricks handles full initialization.
+func (i *Installer) runWithWinetricks(ctx context.Context, winetricks, wineBin, prefixRoot string, verbs []string, log func(string)) error {
+	env := []string{"WINEPREFIX=" + prefixRoot}
+	if wineBin != "" {
+		env = append(env, "WINE="+wineBin)
+		if err := os.MkdirAll(prefixRoot, 0o755); err != nil {
+			return fmt.Errorf("failed to create prefix directory: %w", err)
+		}
+	}
 	args := append([]string{"-q"}, verbs...)
-	log("Installing redists with winetricks: " + strings.Join(verbs, ", "))
-	if out, err := i.run(ctx, winetricks, args, []string{"WINEPREFIX=" + prefixRoot}); err != nil {
+	log("Installing redistributables with winetricks: " + strings.Join(verbs, ", "))
+	if out, err := i.run(ctx, winetricks, args, env); err != nil {
 		return fmt.Errorf("winetricks failed: %w: %s", err, strings.TrimSpace(string(out)))
 	}
 	return nil
+}
+
+// protonWineBinary returns the path to the wine binary inside a Proton directory.
+func protonWineBinary(protonDir string) string {
+	for _, rel := range []string{"files/bin/wine", "bin/wine"} {
+		p := filepath.Join(protonDir, rel)
+		if _, err := os.Stat(p); err == nil {
+			return p
+		}
+	}
+	return ""
 }
 
 // IsMissingTool reports whether err is a MissingToolError.

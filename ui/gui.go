@@ -89,6 +89,10 @@ type GUILogger struct {
 	cancelCh  chan struct{}
 	proceedCh chan struct{}
 
+	// Live timer ticker for running steps
+	tickerDone chan struct{}
+	tickerMu   sync.Mutex
+
 	// Theme
 	darkMode bool
 	filename string
@@ -275,6 +279,8 @@ func (g *GUILogger) StepStarted(name string) {
 	}
 	g.mu.Unlock()
 
+	g.startTicker()
+
 	g.runOnUI(func() {
 		g.updateProgress()
 		g.refreshStepList()
@@ -283,6 +289,7 @@ func (g *GUILogger) StepStarted(name string) {
 
 func (g *GUILogger) StepCompleted(name string, err error) {
 	g.mu.Lock()
+	hasRunning := false
 	if status, ok := g.stepStatuses[name]; ok {
 		status.EndTime = time.Now()
 		status.Duration = status.EndTime.Sub(status.StartTime)
@@ -294,12 +301,53 @@ func (g *GUILogger) StepCompleted(name string, err error) {
 			g.completedSteps++
 		}
 	}
+	for _, s := range g.stepStatuses {
+		if s.Status == StepRunning {
+			hasRunning = true
+			break
+		}
+	}
 	g.mu.Unlock()
+
+	if !hasRunning {
+		g.stopTicker()
+	}
 
 	g.runOnUI(func() {
 		g.updateProgress()
 		g.refreshStepList()
 	})
+}
+
+func (g *GUILogger) startTicker() {
+	g.tickerMu.Lock()
+	defer g.tickerMu.Unlock()
+	if g.tickerDone != nil {
+		return
+	}
+	done := make(chan struct{})
+	g.tickerDone = done
+	go func() {
+		t := time.NewTicker(time.Second)
+		defer t.Stop()
+		for {
+			select {
+			case <-done:
+				return
+			case <-t.C:
+				g.runOnUI(func() { g.refreshStepList() })
+			}
+		}
+	}()
+}
+
+func (g *GUILogger) stopTicker() {
+	g.tickerMu.Lock()
+	defer g.tickerMu.Unlock()
+	if g.tickerDone != nil {
+		close(g.tickerDone)
+		g.tickerDone = nil
+	}
 }
 
 func (g *GUILogger) ConfigureSteps(names []string) {
@@ -439,8 +487,13 @@ func (g *GUILogger) createStepWidget(status *StepStatus, isLast bool, index int)
 
 	// Duration label
 	durationLabel := widget.NewLabel("")
-	if status.Status == StepCompleted || status.Status == StepFailed {
+	switch status.Status {
+	case StepCompleted, StepFailed:
 		durationLabel.SetText(fmt.Sprintf("%.1fs", status.Duration.Seconds()))
+	case StepRunning:
+		if !status.StartTime.IsZero() {
+			durationLabel.SetText(fmt.Sprintf("%ds", int(time.Since(status.StartTime).Seconds())))
+		}
 	}
 	durationLabel.Alignment = fyne.TextAlignTrailing
 
@@ -472,9 +525,15 @@ func (g *GUILogger) createStepWidget(status *StepStatus, isLast bool, index int)
 		// Scroll to bottom
 		logsScroll.ScrollToBottom()
 
+		copyBtn := widget.NewButtonWithIcon("", theme.ContentCopyIcon(), func() {
+			g.window.Clipboard().SetContent(logsText)
+		})
+		copyBtn.Importance = widget.LowImportance
+		logsRow := container.NewBorder(nil, nil, nil, container.NewVBox(copyBtn), logsScroll)
+
 		contentArea = container.NewVBox(
 			mainRow,
-			container.NewPadded(logsScroll),
+			container.NewPadded(logsRow),
 		)
 	} else {
 		contentArea = mainRow
@@ -530,8 +589,6 @@ func (g *GUILogger) Confirm(title, msg string) bool {
 
 func (g *GUILogger) Select(title, prompt string, opts []string) (string, bool) {
 	resCh := make(chan string, 1)
-	canCh := make(chan struct{}, 1)
-	sel := ""
 
 	pfx := findCommonPrefix(opts)
 	dispPfx := ""
@@ -547,49 +604,56 @@ func (g *GUILogger) Select(title, prompt string, opts []string) (string, bool) {
 		p += "\n\nPrefix: " + dispPfx
 	}
 
-	list := widget.NewList(
-		func() int { return len(opts) },
-		func() fyne.CanvasObject { return widget.NewLabel("") },
-		func(i widget.ListItemID, o fyne.CanvasObject) {
-			t := opts[i]
-			if dispPfx != "" {
-				t = strings.TrimPrefix(t, dispPfx)
-				t = strings.TrimPrefix(t, "/")
-			}
-			o.(*widget.Label).SetText(truncMid(t, 60))
-		},
-	)
-	list.OnSelected = func(i widget.ListItemID) {
-		if i >= 0 && i < len(opts) {
-			sel = opts[i]
-		}
-	}
-	if len(opts) == 1 {
-		sel = opts[0]
-		list.Select(0)
-	}
-
 	g.runOnUI(func() {
 		g.raiseWindow()
-		d := dialog.NewCustomConfirm(title, "OK", "Cancel",
-			container.NewBorder(widget.NewLabel(p), nil, nil, nil, container.NewVScroll(list)),
-			func(ok bool) {
-				if !ok || sel == "" {
-					canCh <- struct{}{}
-				} else {
-					resCh <- sel
+
+		msg := widget.NewLabel(p)
+		msg.Wrapping = fyne.TextWrapWord
+		msgScroll := container.NewVScroll(msg)
+		msgScroll.SetMinSize(fyne.NewSize(440, 140))
+
+		copyBtn := widget.NewButtonWithIcon("", theme.ContentCopyIcon(), func() {
+			g.window.Clipboard().SetContent(p)
+		})
+		copyBtn.Importance = widget.LowImportance
+
+		var d *dialog.CustomDialog
+
+		btns := make([]fyne.CanvasObject, len(opts))
+		for i, opt := range opts {
+			opt := opt
+			label := opt
+			if dispPfx != "" {
+				label = strings.TrimPrefix(opt, dispPfx)
+				label = strings.TrimPrefix(label, "/")
+			}
+			label = truncMid(label, 58)
+			btn := widget.NewButton(label, func() {
+				select {
+				case resCh <- opt:
+				default:
 				}
-			}, g.window)
-		d.Resize(fyne.NewSize(480, 340))
+				d.Hide()
+			})
+			btns[i] = btn
+		}
+
+		msgRow := container.NewBorder(nil, nil, nil, container.NewVBox(copyBtn), msgScroll)
+		content := container.NewBorder(nil, container.NewPadded(container.NewVBox(btns...)), nil, nil, msgRow)
+
+		d = dialog.NewCustomWithoutButtons(title, content, g.window)
+		d.SetOnClosed(func() {
+			select {
+			case resCh <- "":
+			default:
+			}
+		})
+		d.Resize(fyne.NewSize(500, 420))
 		d.Show()
 	})
 
-	select {
-	case v := <-resCh:
-		return v, true
-	case <-canCh:
-		return "", false
-	}
+	result := <-resCh
+	return result, result != ""
 }
 
 func (g *GUILogger) ConfirmRetry(title, message string) bool {
