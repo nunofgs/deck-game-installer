@@ -427,6 +427,12 @@ func commonRedistDepotDisplayName(depotID string) string {
 	return ""
 }
 
+// IsKnownRedistDepot reports whether depotID is in the built-in depot mapping.
+func IsKnownRedistDepot(depotID string) bool {
+	_, ok := commonRedistDepotMappings[depotID]
+	return ok
+}
+
 func referencesCommonRedists(depot map[string]any, depotID string, commonDepots map[string]any) bool {
 	if recursiveKeyValue(depot, "depotfromapp", strconv.Itoa(commonRedistsAppID)) ||
 		recursiveKeyValue(depot, "depot_from_app", strconv.Itoa(commonRedistsAppID)) {

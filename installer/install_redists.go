@@ -55,7 +55,11 @@ func (s *InstallSteamRedists) Execute(ctx context.Context, state *State) error {
 
 	for _, item := range redists {
 		if len(item.Verbs) == 0 {
-			state.UI.Log(fmt.Sprintf("Redistributable %s (%s) has no winetricks mapping; skipping it.", item.Name, item.DepotID))
+			if !steammeta.IsKnownRedistDepot(item.DepotID) {
+				state.UI.Log(fmt.Sprintf("WARNING: unrecognised redistributable depot %s (%s) — no winetricks mapping known, skipping.", item.DepotID, item.Name))
+			} else {
+				state.UI.Log(fmt.Sprintf("Redistributable %s (%s) has no winetricks mapping; skipping.", item.Name, item.DepotID))
+			}
 			continue
 		}
 		state.UI.Log(fmt.Sprintf("Redistributable %s (%s) -> %s", item.Name, item.DepotID, strings.Join(item.Verbs, ", ")))
