@@ -504,11 +504,12 @@ func (g *GUILogger) createStepWidget(status *StepStatus, isLast bool, index int)
 	}
 	chevron := widget.NewLabel(chevronText)
 
-	// Main row: name + spacer + duration + chevron
+	// Main row: name (center, gets all remaining space) + duration + chevron (right)
 	mainRow := container.NewBorder(
 		nil, nil,
-		nameLabel,
+		nil,
 		container.NewHBox(durationLabel, chevron),
+		nameLabel,
 	)
 
 	// Build content area (logs if expanded)
@@ -934,10 +935,22 @@ func safeUIScale(windowHeight float64) string {
 		return ""
 	}
 
-	var widthPx, screenH, widthMm float64
+	var widthPx, screenH, widthMm, heightMm float64
 	fmt.Sscanf(m[1], "%f", &widthPx)
 	fmt.Sscanf(m[2], "%f", &screenH)
 	fmt.Sscanf(m[3], "%f", &widthMm)
+	fmt.Sscanf(m[4], "%f", &heightMm)
+
+	// Some panels (e.g. Steam Deck) are physically portrait and reported by
+	// xrandr in their native orientation with a rotation flag, e.g.:
+	//   800x1280+0+0 right ... 100mm x 160mm
+	// Swap so widthPx/widthMm represent the logical landscape width and
+	// screenH represents the height the window must fit within.
+	if screenH > widthPx {
+		widthPx, screenH = screenH, widthPx
+		widthMm, heightMm = heightMm, widthMm
+	}
+	_ = heightMm
 
 	const baselineDPI = 120.0
 	detectedScale := (widthPx / (widthMm / 25.4)) / baselineDPI
