@@ -68,10 +68,10 @@ func runInstall(ctx context.Context, path string) {
 		state := installer.NewState(path, logger, steamMgr, protonMgr)
 
 		if err := runWorkflow(ctx, state, path); err != nil {
-			logger.Log(fmt.Sprintf("[FATAL] %v", err))
+			logger.Log("Installation failed: " + err.Error())
 			guiLogger.ShowFailed(err.Error())
 		} else {
-			logger.Log("[DONE] Installation completed successfully")
+			logger.Log("Installation completed successfully.")
 			guiLogger.SetAppID(state.AppID)
 			guiLogger.ShowComplete()
 		}
@@ -126,24 +126,61 @@ func runSelectedPipeline(ctx context.Context, state *installer.State) error {
 
 		state.InstallerPath = state.InputPath
 		state.GameName = installer.DeriveGameName(state.InputPath)
-		runner.AddSteps(
-			installer.NewShutdownSteam(),
-			installer.NewAddToSteam(),
-			installer.NewConfigureProton(),
-			installer.NewStartSteamForRedists(),
-			installer.NewInstallSteamRedists(),
-			installer.NewShutdownSteam(),
-			installer.NewRunInstaller(),
-			installer.NewWaitForExit(),
-			installer.NewFindGame(),
-			installer.NewUpdateShortcut(),
-			installer.NewFinalRestart(),
-		)
+
+		appID, appName, found, diag, err := state.Steam.FindShortcutByExe(state.InputPath)
+		if err != nil {
+			state.UI.Log("Warning: could not check for existing shortcut: " + err.Error())
+		} else if found {
+			state.UI.Log(fmt.Sprintf("Found existing shortcut: %q (app ID %d)", appName, appID))
+			state.AppID = appID
+			state.GameName = strings.TrimSuffix(appName, " (Installer)")
+			state.ResumeMode = promptResumeMode(state)
+		} else {
+			state.UI.Log("No existing shortcut found — starting fresh installation")
+			if diag != "" {
+				state.UI.Log("  Shortcut lookup: " + diag)
+			}
+		}
+
+		switch state.ResumeMode {
+		case installer.ResumeModeFinished:
+			runner.AddSteps(
+				installer.NewFindGame(),
+				installer.NewShutdownSteam(),
+				installer.NewUpdateShortcut(),
+				installer.NewFinalRestart(),
+			)
+		case installer.ResumeModePending:
+			runner.AddSteps(
+				installer.NewShutdownSteam(),
+				installer.NewRunInstaller(),
+				installer.NewWaitForExit(),
+				installer.NewFindGame(),
+				installer.NewUpdateShortcut(),
+				installer.NewFinalRestart(),
+			)
+		default:
+			runner.AddSteps(
+				installer.NewConfirmGameName(),
+				installer.NewShutdownSteam(),
+				installer.NewAddToSteam(),
+				installer.NewConfigureProton(),
+				installer.NewStartSteamForRedists(),
+				installer.NewInstallSteamRedists(),
+				installer.NewShutdownSteam(),
+				installer.NewRunInstaller(),
+				installer.NewWaitForExit(),
+				installer.NewFindGame(),
+				installer.NewUpdateShortcut(),
+				installer.NewFinalRestart(),
+			)
+		}
 		return runner.Run(ctx)
 
 	case installer.InputModePortable:
 		runner.AddSteps(
 			installer.NewFindPortableGame(),
+			installer.NewConfirmGameName(),
 			installer.NewShutdownSteam(),
 			installer.NewAddGameToSteam(),
 			installer.NewConfigureProton(),
@@ -156,4 +193,24 @@ func runSelectedPipeline(ctx context.Context, state *installer.State) error {
 	default:
 		return fmt.Errorf("unsupported input mode: %s", state.InputMode)
 	}
+}
+
+func promptResumeMode(state *installer.State) installer.ResumeMode {
+	const (
+		optFinished = "Installation is complete — find game executable"
+		optPending  = "Still installing — re-launch installer"
+		optRestart  = "Start over — ignore existing shortcut"
+	)
+	choice, ok := state.UI.Select(
+		"Resume Installation",
+		fmt.Sprintf("A Steam shortcut already exists for \"%s\".\nWhat would you like to do?", state.GameName),
+		[]string{optFinished, optPending, optRestart},
+	)
+	if !ok || choice == optRestart {
+		return installer.ResumeModeNone
+	}
+	if choice == optFinished {
+		return installer.ResumeModeFinished
+	}
+	return installer.ResumeModePending
 }

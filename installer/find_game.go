@@ -26,7 +26,11 @@ func (s *FindGame) Execute(ctx context.Context, state *State) error {
 
 	executables, err := state.Proton.ScanPrefixForExecutables(state.AppID)
 	if err != nil {
-		return fmt.Errorf("failed to scan for game executables: %w", err)
+		state.UI.Log("Expected prefix not found, scanning all Proton prefixes...")
+		executables, err = state.Proton.ScanAllPrefixesForExecutables()
+		if err != nil {
+			return fmt.Errorf("failed to scan for game executables: %w", err)
+		}
 	}
 
 	for len(executables) == 0 {
@@ -63,7 +67,10 @@ func (s *FindGame) Execute(ctx context.Context, state *State) error {
 		state.UI.Log("Scanning again...")
 		executables, err = state.Proton.ScanPrefixForExecutables(state.AppID)
 		if err != nil {
-			return fmt.Errorf("failed to scan for game executables: %w", err)
+			executables, err = state.Proton.ScanAllPrefixesForExecutables()
+			if err != nil {
+				return fmt.Errorf("failed to scan for game executables: %w", err)
+			}
 		}
 	}
 

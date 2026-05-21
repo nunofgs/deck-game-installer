@@ -38,7 +38,15 @@ type Logger interface {
 	// Used while waiting for the installer to complete; returns a channel that fires on click.
 	WaitWithManualOverride() <-chan struct{}
 
+	// EnableManualOverride immediately enables the proceed button, skipping the
+	// countdown. Called when automatic detection fires so the user can confirm.
+	EnableManualOverride()
+
 	// ConfirmRetryOrWait shows a dialog with "Scan Again", "Keep Waiting", and "Cancel" buttons.
 	// Used when no game executables are found after installation.
 	ConfirmRetryOrWait(title, message string) ConfirmAction
+
+	// PromptText shows a text-input dialog.
+	// Returns the entered text and true if confirmed, or empty string and false if cancelled.
+	PromptText(title, message, defaultValue string) (string, bool)
 }

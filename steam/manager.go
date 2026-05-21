@@ -158,6 +158,50 @@ func (m *Manager) AddShortcut(appName, exePath, args, startDir string) (int32, e
 	return appid, nil
 }
 
+// FindShortcutByExe looks up a shortcut by its exe path.
+// Returns the app ID, app name, whether it was found, and a diagnostic string listing all exe paths seen.
+func (m *Manager) FindShortcutByExe(exePath string) (int32, string, bool, string, error) {
+	path := m.ShortcutsPath()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return 0, "", false, "shortcuts.vdf not found", nil
+		}
+		return 0, "", false, "", err
+	}
+	obj, err := ReadBinaryVDF(data)
+	if err != nil {
+		return 0, "", false, "", err
+	}
+	shortcuts, ok := obj["shortcuts"].(map[string]KVValue)
+	if !ok {
+		return 0, "", false, "no shortcuts key in vdf", nil
+	}
+	quoted := "\"" + exePath + "\""
+	var seen []string
+	for _, v := range shortcuts {
+		entry, ok := v.(map[string]KVValue)
+		if !ok {
+			continue
+		}
+		// Steam may write the field as "Exe" or "exe" depending on version.
+		exe, _ := entry["Exe"].(string)
+		if exe == "" {
+			exe, _ = entry["exe"].(string)
+		}
+		seen = append(seen, exe)
+		if exe == quoted || exe == exePath {
+			appid, _ := entry["appid"].(int32)
+			name, _ := entry["AppName"].(string)
+			if name == "" {
+				name, _ = entry["appname"].(string)
+			}
+			return appid, name, true, "", nil
+		}
+	}
+	return 0, "", false, fmt.Sprintf("not found (looking for %q, saw: %v)", quoted, seen), nil
+}
+
 // DeleteShortcut removes a shortcut by app ID.
 func (m *Manager) DeleteShortcut(appID int32) error {
 	path := m.ShortcutsPath()

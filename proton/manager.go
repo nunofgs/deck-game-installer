@@ -219,6 +219,34 @@ func (m *Manager) ScanPrefixForExecutables(appID int32) ([]string, error) {
 	return results, nil
 }
 
+// ScanAllPrefixesForExecutables scans every existing Proton prefix for game
+// executables. Used as a fallback when the expected prefix (derived from the
+// shortcut app ID) does not exist — e.g. because Steam reassigned the app ID
+// after the game was already installed under a different one.
+func (m *Manager) ScanAllPrefixesForExecutables() ([]string, error) {
+	entries, err := os.ReadDir(m.compatDataPath)
+	if err != nil {
+		return nil, fmt.Errorf("could not list Proton prefixes: %w", err)
+	}
+	var all []string
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		n, err := strconv.ParseUint(e.Name(), 10, 32)
+		if err != nil {
+			continue
+		}
+		appID := int32(uint32(n))
+		exes, err := m.ScanPrefixForExecutables(appID)
+		if err != nil {
+			continue
+		}
+		all = append(all, exes...)
+	}
+	return all, nil
+}
+
 // scanProtonShortcuts reads Proton-generated .desktop files from the
 // proton_shortcuts directory and returns executables found in their
 // working directories. These shortcuts carry a real Linux Path= field,

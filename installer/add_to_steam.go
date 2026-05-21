@@ -76,6 +76,11 @@ func DeriveGameName(path string) string {
 		name = strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
 		name = strings.ReplaceAll(name, "_", " ")
 		name = strings.ReplaceAll(name, "-", " ")
+		// If even the filename is a generic installer name, we can't determine
+		// the game name automatically — return empty so the caller can prompt.
+		if genericNames[strings.ToLower(name)] {
+			return ""
+		}
 	}
 
 	name = titleCase(name)
