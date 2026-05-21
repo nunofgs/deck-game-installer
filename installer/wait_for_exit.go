@@ -26,8 +26,7 @@ func (s *WaitForExit) Name() string {
 }
 
 func (s *WaitForExit) Execute(ctx context.Context, state *State) error {
-	state.UI.Log(">>> ACTION REQUIRED <<<")
-	state.UI.Log("Complete the installation in the game window, then click the button below.")
+	state.UI.Log("Action required: complete the installation in the game window, then click the button below.")
 
 	// Get the URL app ID format used in Steam logs
 	urlAppID := steam.GetURLAppID(state.AppID)

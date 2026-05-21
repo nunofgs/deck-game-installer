@@ -68,10 +68,10 @@ func runInstall(ctx context.Context, path string) {
 		state := installer.NewState(path, logger, steamMgr, protonMgr)
 
 		if err := runWorkflow(ctx, state, path); err != nil {
-			logger.Log(fmt.Sprintf("[FATAL] %v", err))
+			logger.Log("Installation failed: " + err.Error())
 			guiLogger.ShowFailed(err.Error())
 		} else {
-			logger.Log("[DONE] Installation completed successfully")
+			logger.Log("Installation completed successfully.")
 			guiLogger.SetAppID(state.AppID)
 			guiLogger.ShowComplete()
 		}
