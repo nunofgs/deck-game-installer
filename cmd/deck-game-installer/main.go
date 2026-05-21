@@ -127,10 +127,19 @@ func runSelectedPipeline(ctx context.Context, state *installer.State) error {
 		state.InstallerPath = state.InputPath
 		state.GameName = installer.DeriveGameName(state.InputPath)
 
-		if appID, appName, found, _ := state.Steam.FindShortcutByExe(state.InputPath); found {
+		appID, appName, found, diag, err := state.Steam.FindShortcutByExe(state.InputPath)
+		if err != nil {
+			state.UI.Log("Warning: could not check for existing shortcut: " + err.Error())
+		} else if found {
+			state.UI.Log(fmt.Sprintf("Found existing shortcut: %q (app ID %d)", appName, appID))
 			state.AppID = appID
 			state.GameName = strings.TrimSuffix(appName, " (Installer)")
 			state.ResumeMode = promptResumeMode(state)
+		} else {
+			state.UI.Log("No existing shortcut found — starting fresh installation")
+			if diag != "" {
+				state.UI.Log("  Shortcut lookup: " + diag)
+			}
 		}
 
 		switch state.ResumeMode {
