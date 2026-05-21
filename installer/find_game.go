@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+
+	"deck-game-installer/ui"
 )
 
 // FindGame scans the Proton prefix for installed game executables.
@@ -28,21 +30,34 @@ func (s *FindGame) Execute(ctx context.Context, state *State) error {
 	}
 
 	for len(executables) == 0 {
-		retry := state.UI.ConfirmRetry(
+		action := state.UI.ConfirmRetryOrWait(
 			"No Game Executables Found",
 			"Could not find any game executables in the Proton prefix.\n\n"+
 				"This might happen if:\n"+
 				"• The installer is still running\n"+
 				"• The installer didn't complete successfully\n"+
 				"• The game installed to a non-standard location\n\n"+
-				"Finish the installation and click \"Scan Again\", or cancel to stop here.\n"+
-				"The Steam shortcut will be left in place — to remove it, right-click\n"+
-				"the game in Steam → Manage → Remove from your library.",
+				"If the installer is still running, click \"Keep Waiting\" and then\n"+
+				"click the button once it finishes. Or click \"Scan Again\" to retry now.\n"+
+				"The Steam shortcut will be left in place if you cancel — to remove it,\n"+
+				"right-click the game in Steam → Manage → Remove from your library.",
 		)
-		if !retry {
+
+		switch action {
+		case ui.ActionCancel:
 			state.UI.Log("Cancelled — Steam shortcut left in place.")
 			state.UI.Log("To remove it: right-click the game in Steam → Manage → Remove from your library.")
 			return fmt.Errorf("no game executables found — shortcut left in place")
+
+		case ui.ActionKeepWaiting:
+			state.UI.Log("Waiting for installer to finish...")
+			manualCh := state.UI.WaitWithManualOverride()
+			select {
+			case <-manualCh:
+				state.UI.Log("Proceeding...")
+			case <-ctx.Done():
+				return ctx.Err()
+			}
 		}
 
 		state.UI.Log("Scanning again...")

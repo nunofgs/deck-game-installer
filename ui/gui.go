@@ -656,16 +656,31 @@ func (g *GUILogger) Select(title, prompt string, opts []string) (string, bool) {
 	return result, result != ""
 }
 
-func (g *GUILogger) ConfirmRetry(title, message string) bool {
-	ch := make(chan bool, 1)
+func (g *GUILogger) ConfirmRetryOrWait(title, message string) ConfirmAction {
+	ch := make(chan ConfirmAction, 1)
 	g.runOnUI(func() {
 		g.raiseWindow()
-		d := dialog.NewCustomConfirm(title, "Scan Again", "Cancel",
+		var d dialog.Dialog
+		keepWaitingBtn := widget.NewButton("Keep Waiting", func() {
+			d.Hide()
+			ch <- ActionKeepWaiting
+		})
+		content := container.NewVBox(
 			widget.NewLabel(message),
-			func(ok bool) { ch <- ok },
+			container.NewCenter(keepWaitingBtn),
+		)
+		d = dialog.NewCustomConfirm(title, "Scan Again", "Cancel",
+			content,
+			func(ok bool) {
+				if ok {
+					ch <- ActionScanAgain
+				} else {
+					ch <- ActionCancel
+				}
+			},
 			g.window,
 		)
-		d.Resize(fyne.NewSize(420, 200))
+		d.Resize(fyne.NewSize(440, 280))
 		d.Show()
 	})
 	return <-ch

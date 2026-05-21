@@ -92,6 +92,14 @@ func waitForSteamGameToExit(ctx context.Context, gameID string, logFn func(strin
 	activePIDs := make(map[int]bool)
 	hasStarted := false
 
+	// allExitedAt records when activePIDs last dropped to zero. Some installers
+	// (e.g. DODI) use a launcher that exits immediately and spawns the real
+	// installer as a child process Steam doesn't track. We wait a grace period
+	// after the last tracked process exits before declaring done, so any
+	// newly-launched child processes have time to appear in the Steam log.
+	var allExitedAt time.Time
+	const gracePeriod = 5 * time.Second
+
 	ticker := time.NewTicker(500 * time.Millisecond)
 	defer ticker.Stop()
 
@@ -126,6 +134,7 @@ func waitForSteamGameToExit(ctx context.Context, gameID string, logFn func(strin
 							if part == "process" && i+1 < len(parts) {
 								if pid, err := strconv.Atoi(parts[i+1]); err == nil {
 									activePIDs[pid] = true
+									allExitedAt = time.Time{} // new process appeared, reset grace timer
 									if !hasStarted {
 										logFn("Installer started (tracking " + strconv.Itoa(len(activePIDs)) + " process(es))")
 										hasStarted = true
@@ -152,9 +161,17 @@ func waitForSteamGameToExit(ctx context.Context, gameID string, logFn func(strin
 			}
 			file.Close()
 
-			// If we've seen processes start and all have exited, we're done
+			// If we've seen processes start and all have exited, start the grace
+			// period. Only declare done once the grace period elapses without new
+			// processes appearing — this handles launchers that exit before
+			// spawning the real installer subprocess.
 			if hasStarted && len(activePIDs) == 0 {
-				return nil
+				if allExitedAt.IsZero() {
+					allExitedAt = time.Now()
+					logFn("All tracked processes exited, waiting briefly for any child processes...")
+				} else if time.Since(allExitedAt) >= gracePeriod {
+					return nil
+				}
 			}
 		}
 	}
