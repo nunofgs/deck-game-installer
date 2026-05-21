@@ -97,3 +97,10 @@ func (t *TeeLogger) ConfirmRetryOrWait(title, message string) ConfirmAction {
 	t.writeLine(fmt.Sprintf("[CONFIRM RETRY RESULT] %v", result))
 	return result
 }
+
+func (t *TeeLogger) PromptText(title, message, defaultValue string) (string, bool) {
+	t.writeLine(fmt.Sprintf("[PROMPT TEXT] %s — %s (default: %q)", title, message, defaultValue))
+	text, ok := t.inner.PromptText(title, message, defaultValue)
+	t.writeLine(fmt.Sprintf("[PROMPT TEXT RESULT] %q ok=%v", text, ok))
+	return text, ok
+}

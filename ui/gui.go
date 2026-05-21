@@ -686,6 +686,37 @@ func (g *GUILogger) ConfirmRetryOrWait(title, message string) ConfirmAction {
 	return <-ch
 }
 
+func (g *GUILogger) PromptText(title, message, defaultValue string) (string, bool) {
+	ch := make(chan struct {
+		text string
+		ok   bool
+	}, 1)
+	g.runOnUI(func() {
+		g.raiseWindow()
+		entry := widget.NewEntry()
+		entry.SetText(defaultValue)
+		entry.SetPlaceHolder("Enter game name...")
+		content := container.NewVBox(
+			widget.NewLabel(message),
+			entry,
+		)
+		d := dialog.NewCustomConfirm(title, "OK", "Cancel",
+			content,
+			func(ok bool) {
+				ch <- struct {
+					text string
+					ok   bool
+				}{entry.Text, ok}
+			},
+			g.window,
+		)
+		d.Resize(fyne.NewSize(420, 180))
+		d.Show()
+	})
+	result := <-ch
+	return result.text, result.ok
+}
+
 func (g *GUILogger) WaitWithManualOverride() <-chan struct{} {
 	g.runOnUI(func() {
 		g.statusLabel.SetText("Waiting for installer to finish...")

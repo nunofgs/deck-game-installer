@@ -127,6 +127,7 @@ func runSelectedPipeline(ctx context.Context, state *installer.State) error {
 		state.InstallerPath = state.InputPath
 		state.GameName = installer.DeriveGameName(state.InputPath)
 		runner.AddSteps(
+			installer.NewConfirmGameName(),
 			installer.NewShutdownSteam(),
 			installer.NewAddToSteam(),
 			installer.NewConfigureProton(),
@@ -144,6 +145,7 @@ func runSelectedPipeline(ctx context.Context, state *installer.State) error {
 	case installer.InputModePortable:
 		runner.AddSteps(
 			installer.NewFindPortableGame(),
+			installer.NewConfirmGameName(),
 			installer.NewShutdownSteam(),
 			installer.NewAddGameToSteam(),
 			installer.NewConfigureProton(),
