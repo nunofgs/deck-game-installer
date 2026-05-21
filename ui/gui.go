@@ -738,6 +738,13 @@ func (g *GUILogger) WaitWithManualOverride() <-chan struct{} {
 	return g.proceedCh
 }
 
+func (g *GUILogger) EnableManualOverride() {
+	g.runOnUI(func() {
+		g.proceedBtn.SetText("I finished the installation. Please proceed.")
+		g.proceedBtn.Enable()
+	})
+}
+
 func (g *GUILogger) SetAppID(appID int32) {
 	g.appID = appID
 }

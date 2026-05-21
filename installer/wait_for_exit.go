@@ -27,33 +27,36 @@ func (s *WaitForExit) Name() string {
 
 func (s *WaitForExit) Execute(ctx context.Context, state *State) error {
 	state.UI.Log(">>> ACTION REQUIRED <<<")
-	state.UI.Log("Complete the installation in the game window and quit the installer.")
-	state.UI.Log("We'll continue automatically once all installer processes exit.")
-	state.UI.Log("If the installer doesn't appear, click the button below to continue manually.")
+	state.UI.Log("Complete the installation in the game window, then click the button below.")
 
 	// Get the URL app ID format used in Steam logs
 	urlAppID := steam.GetURLAppID(state.AppID)
 
-	// Start monitoring in background
-	doneCh := make(chan error, 1)
-	go func() {
-		doneCh <- waitForSteamGameToExit(ctx, urlAppID, state.UI.Log)
-	}()
-
 	// Show manual override button (returns a channel)
 	manualCh := state.UI.WaitWithManualOverride()
 
-	// Wait for either automatic detection or manual override
-	select {
-	case err := <-doneCh:
-		if err != nil {
-			state.UI.Log("Automatic detection issue: " + err.Error())
-			state.UI.Log("Proceeding anyway - please ensure the installer completed successfully.")
-		} else {
-			state.UI.Log("All installer processes have exited.")
+	// Monitor in background — when detection fires it enables the button
+	// immediately (skipping the countdown) but does NOT auto-proceed.
+	// Some installers use launchers that exit before spawning the real setup
+	// UI, so we can never be certain all work is done from log monitoring
+	// alone. The user must always confirm by clicking the button.
+	go func() {
+		err := waitForSteamGameToExit(ctx, urlAppID, state.UI.Log)
+		if ctx.Err() != nil {
+			return
 		}
+		if err != nil {
+			state.UI.Log("Process detection issue: " + err.Error())
+		} else {
+			state.UI.Log("Tracked installer processes have exited — click the button when the installation is fully complete.")
+		}
+		state.UI.EnableManualOverride()
+	}()
+
+	// Always wait for explicit user confirmation.
+	select {
 	case <-manualCh:
-		state.UI.Log("Manual override - continuing...")
+		state.UI.Log("Continuing...")
 	case <-ctx.Done():
 		return ctx.Err()
 	}
