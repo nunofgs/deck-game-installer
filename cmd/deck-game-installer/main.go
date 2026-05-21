@@ -145,8 +145,8 @@ func runSelectedPipeline(ctx context.Context, state *installer.State) error {
 		switch state.ResumeMode {
 		case installer.ResumeModeFinished:
 			runner.AddSteps(
-				installer.NewShutdownSteam(),
 				installer.NewFindGame(),
+				installer.NewShutdownSteam(),
 				installer.NewUpdateShortcut(),
 				installer.NewFinalRestart(),
 			)
