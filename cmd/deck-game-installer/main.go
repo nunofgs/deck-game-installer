@@ -126,20 +126,46 @@ func runSelectedPipeline(ctx context.Context, state *installer.State) error {
 
 		state.InstallerPath = state.InputPath
 		state.GameName = installer.DeriveGameName(state.InputPath)
-		runner.AddSteps(
-			installer.NewConfirmGameName(),
-			installer.NewShutdownSteam(),
-			installer.NewAddToSteam(),
-			installer.NewConfigureProton(),
-			installer.NewStartSteamForRedists(),
-			installer.NewInstallSteamRedists(),
-			installer.NewShutdownSteam(),
-			installer.NewRunInstaller(),
-			installer.NewWaitForExit(),
-			installer.NewFindGame(),
-			installer.NewUpdateShortcut(),
-			installer.NewFinalRestart(),
-		)
+
+		if appID, appName, found, _ := state.Steam.FindShortcutByExe(state.InputPath); found {
+			state.AppID = appID
+			state.GameName = strings.TrimSuffix(appName, " (Installer)")
+			state.ResumeMode = promptResumeMode(state)
+		}
+
+		switch state.ResumeMode {
+		case installer.ResumeModeFinished:
+			runner.AddSteps(
+				installer.NewShutdownSteam(),
+				installer.NewFindGame(),
+				installer.NewUpdateShortcut(),
+				installer.NewFinalRestart(),
+			)
+		case installer.ResumeModePending:
+			runner.AddSteps(
+				installer.NewShutdownSteam(),
+				installer.NewRunInstaller(),
+				installer.NewWaitForExit(),
+				installer.NewFindGame(),
+				installer.NewUpdateShortcut(),
+				installer.NewFinalRestart(),
+			)
+		default:
+			runner.AddSteps(
+				installer.NewConfirmGameName(),
+				installer.NewShutdownSteam(),
+				installer.NewAddToSteam(),
+				installer.NewConfigureProton(),
+				installer.NewStartSteamForRedists(),
+				installer.NewInstallSteamRedists(),
+				installer.NewShutdownSteam(),
+				installer.NewRunInstaller(),
+				installer.NewWaitForExit(),
+				installer.NewFindGame(),
+				installer.NewUpdateShortcut(),
+				installer.NewFinalRestart(),
+			)
+		}
 		return runner.Run(ctx)
 
 	case installer.InputModePortable:
@@ -158,4 +184,24 @@ func runSelectedPipeline(ctx context.Context, state *installer.State) error {
 	default:
 		return fmt.Errorf("unsupported input mode: %s", state.InputMode)
 	}
+}
+
+func promptResumeMode(state *installer.State) installer.ResumeMode {
+	const (
+		optFinished = "Installation is complete — find game executable"
+		optPending  = "Still installing — re-launch installer"
+		optRestart  = "Start over — ignore existing shortcut"
+	)
+	choice, ok := state.UI.Select(
+		"Resume Installation",
+		fmt.Sprintf("A Steam shortcut already exists for \"%s\".\nWhat would you like to do?", state.GameName),
+		[]string{optFinished, optPending, optRestart},
+	)
+	if !ok || choice == optRestart {
+		return installer.ResumeModeNone
+	}
+	if choice == optFinished {
+		return installer.ResumeModeFinished
+	}
+	return installer.ResumeModePending
 }

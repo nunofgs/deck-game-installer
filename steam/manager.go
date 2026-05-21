@@ -158,6 +158,41 @@ func (m *Manager) AddShortcut(appName, exePath, args, startDir string) (int32, e
 	return appid, nil
 }
 
+// FindShortcutByExe looks up a shortcut by its exe path.
+// Returns the app ID, app name, and whether it was found.
+func (m *Manager) FindShortcutByExe(exePath string) (int32, string, bool, error) {
+	path := m.ShortcutsPath()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return 0, "", false, nil
+		}
+		return 0, "", false, err
+	}
+	obj, err := ReadBinaryVDF(data)
+	if err != nil {
+		return 0, "", false, err
+	}
+	shortcuts, ok := obj["shortcuts"].(map[string]KVValue)
+	if !ok {
+		return 0, "", false, nil
+	}
+	quoted := "\"" + exePath + "\""
+	for _, v := range shortcuts {
+		entry, ok := v.(map[string]KVValue)
+		if !ok {
+			continue
+		}
+		exe, _ := entry["Exe"].(string)
+		if exe == quoted || exe == exePath {
+			appid, _ := entry["appid"].(int32)
+			name, _ := entry["AppName"].(string)
+			return appid, name, true, nil
+		}
+	}
+	return 0, "", false, nil
+}
+
 // DeleteShortcut removes a shortcut by app ID.
 func (m *Manager) DeleteShortcut(appID int32) error {
 	path := m.ShortcutsPath()
