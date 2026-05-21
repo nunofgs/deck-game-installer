@@ -1,6 +1,15 @@
 // Package ui provides interfaces for user interaction during installation.
 package ui
 
+// ConfirmAction represents the user's choice in a retry/wait dialog.
+type ConfirmAction int
+
+const (
+	ActionCancel      ConfirmAction = iota // User cancelled; leave shortcut in place.
+	ActionScanAgain                        // User wants to scan for executables immediately.
+	ActionKeepWaiting                      // User wants to wait longer before scanning.
+)
+
 // Logger is the interface for user interaction during the installation workflow.
 // This abstraction allows the workflow to work with different UI implementations
 // (GUI, CLI, or testing mocks).
@@ -29,7 +38,7 @@ type Logger interface {
 	// Used while waiting for the installer to complete; returns a channel that fires on click.
 	WaitWithManualOverride() <-chan struct{}
 
-	// ConfirmRetry shows a dialog with "Cancel" and "Scan Again" buttons.
-	// Returns true if the user wants to retry, false if they cancelled.
-	ConfirmRetry(title, message string) bool
+	// ConfirmRetryOrWait shows a dialog with "Scan Again", "Keep Waiting", and "Cancel" buttons.
+	// Used when no game executables are found after installation.
+	ConfirmRetryOrWait(title, message string) ConfirmAction
 }
