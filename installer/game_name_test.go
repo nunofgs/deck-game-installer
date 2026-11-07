@@ -17,7 +17,7 @@ func TestGameNamesOmitBracketedText(t *testing.T) {
 		{"[test]", ""},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			if got := stripBracketedText(test.name); got != test.want {
+			if got := cleanGameName(test.name); got != test.want {
 				t.Errorf("manual name = %q, want %q", got, test.want)
 			}
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"deck-game-installer/iso"
@@ -55,14 +56,18 @@ func gameNameFromPath(isoPath, _ string) string {
 	return cleanGameName(name)
 }
 
-// cleanGameName removes bracketed text and replaces separators with spaces.
+var bracketedText = regexp.MustCompile(`\[[^\[\]]*\]`)
+
 func cleanGameName(name string) string {
-	name = stripBracketedText(name)
+	for bracketedText.MatchString(name) {
+		name = bracketedText.ReplaceAllString(name, "")
+	}
+
 	replacer := strings.NewReplacer("_", " ", ".", " ", "-", " ")
 	clean := replacer.Replace(name)
 	clean = strings.Join(strings.Fields(clean), " ")
 	if clean == "" {
-		return name
+		return strings.TrimSpace(name)
 	}
 	return clean
 }
