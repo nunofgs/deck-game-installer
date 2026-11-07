@@ -127,14 +127,14 @@ func runSelectedPipeline(ctx context.Context, state *installer.State) error {
 			runner.AddSteps(
 				installer.NewMountISO(),
 				installer.NewFindInstaller(),
-				installer.NewShutdownSteam(),
 				installer.NewAddToSteam(),
 				installer.NewRunInstaller(),
 				installer.NewWaitForExit(),
 				installer.NewFindGame(),
+				installer.NewShutdownSteam(),
 				installer.NewUpdateShortcut(),
 				installer.NewUnmount(),
-				installer.NewFinalRestart(),
+				installer.NewStartSteam(),
 			)
 			return runner.Run(ctx)
 		}
@@ -163,27 +163,27 @@ func runSelectedPipeline(ctx context.Context, state *installer.State) error {
 				installer.NewFindGame(),
 				installer.NewShutdownSteam(),
 				installer.NewUpdateShortcut(),
-				installer.NewFinalRestart(),
+				installer.NewStartSteam(),
 			)
 		case installer.ResumeModePending:
 			runner.AddSteps(
-				installer.NewShutdownSteam(),
 				installer.NewRunInstaller(),
 				installer.NewWaitForExit(),
 				installer.NewFindGame(),
+				installer.NewShutdownSteam(),
 				installer.NewUpdateShortcut(),
-				installer.NewFinalRestart(),
+				installer.NewStartSteam(),
 			)
 		default:
 			runner.AddSteps(
 				installer.NewConfirmGameName(),
-				installer.NewShutdownSteam(),
 				installer.NewAddToSteam(),
 				installer.NewRunInstaller(),
 				installer.NewWaitForExit(),
 				installer.NewFindGame(),
+				installer.NewShutdownSteam(),
 				installer.NewUpdateShortcut(),
-				installer.NewFinalRestart(),
+				installer.NewStartSteam(),
 			)
 		}
 		return runner.Run(ctx)
@@ -192,11 +192,8 @@ func runSelectedPipeline(ctx context.Context, state *installer.State) error {
 		runner.AddSteps(
 			installer.NewFindPortableGame(),
 			installer.NewConfirmGameName(),
-			installer.NewShutdownSteam(),
 			installer.NewAddGameToSteam(),
-			installer.NewStartSteamForRedists(),
 			installer.NewInstallSteamRedists(),
-			installer.NewFinalRestart(),
 		)
 		return runner.Run(ctx)
 

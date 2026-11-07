@@ -3,7 +3,6 @@ package installer
 import (
 	"context"
 	"fmt"
-	"path/filepath"
 )
 
 // AddToSteam creates a Steam shortcut for the installer or portable game.
@@ -24,11 +23,10 @@ func (s *AddToSteam) Execute(ctx context.Context, state *State) error {
 	if s.installer {
 		appName += " (Installer)"
 	}
-	startDir := filepath.Dir(state.InstallerPath)
 
 	state.UI.Log("Creating Steam shortcut: " + appName)
 
-	appID, err := state.Steam.AddShortcut(appName, state.InstallerPath, "", startDir)
+	appID, err := state.Steam.AddShortcut(ctx, appName, state.InstallerPath)
 	if err != nil {
 		return fmt.Errorf("failed to create Steam shortcut: %w", err)
 	}

@@ -5,14 +5,13 @@ import (
 	"fmt"
 )
 
-// StartSteamForRedists starts Steam and waits for it to load shortcuts so
-// protontricks can find the newly-added shortcut when installing redists.
-type StartSteamForRedists struct{}
+// StartSteam loads the updated shortcut after the installer finishes.
+type StartSteam struct{}
 
-func NewStartSteamForRedists() *StartSteamForRedists { return &StartSteamForRedists{} }
-func (s *StartSteamForRedists) Name() string         { return "Start Steam" }
+func NewStartSteam() *StartSteam   { return &StartSteam{} }
+func (s *StartSteam) Name() string { return "Start Steam" }
 
-func (s *StartSteamForRedists) Execute(ctx context.Context, state *State) error {
+func (s *StartSteam) Execute(ctx context.Context, state *State) error {
 	state.UI.Log("Starting Steam to load shortcut...")
 	if err := state.Steam.StartSteam(); err != nil {
 		return fmt.Errorf("failed to start Steam: %w", err)
