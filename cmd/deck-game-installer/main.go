@@ -15,7 +15,10 @@ import (
 	"deck-game-installer/smb"
 	"deck-game-installer/steam"
 	"deck-game-installer/ui"
+	"deck-game-installer/updater"
 )
+
+var version = "dev"
 
 func main() {
 	ctx, cancel := context.WithCancel(context.Background())
@@ -55,6 +58,22 @@ func printUsage() {
 }
 
 func runInstall(ctx context.Context, path string) {
+	updated, err := updater.Update(ctx, version, func(message string) { fmt.Println(message) })
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "Update skipped:", err)
+	}
+
+	if updated {
+		executable, err := os.Executable()
+		if err == nil {
+			err = syscall.Exec(executable, os.Args, os.Environ())
+		}
+
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "Could not restart after update:", err)
+		}
+	}
+
 	filename := filepath.Base(path)
 	guiLogger := ui.NewGUILogger("Deck Game Installer", filename)
 	logger := ui.NewTeeLogger(guiLogger)
@@ -110,7 +129,6 @@ func runSelectedPipeline(ctx context.Context, state *installer.State) error {
 				installer.NewFindInstaller(),
 				installer.NewShutdownSteam(),
 				installer.NewAddToSteam(),
-				installer.NewConfigureProton(),
 				installer.NewRunInstaller(),
 				installer.NewWaitForExit(),
 				installer.NewFindGame(),
@@ -161,7 +179,6 @@ func runSelectedPipeline(ctx context.Context, state *installer.State) error {
 				installer.NewConfirmGameName(),
 				installer.NewShutdownSteam(),
 				installer.NewAddToSteam(),
-				installer.NewConfigureProton(),
 				installer.NewRunInstaller(),
 				installer.NewWaitForExit(),
 				installer.NewFindGame(),
@@ -177,7 +194,6 @@ func runSelectedPipeline(ctx context.Context, state *installer.State) error {
 			installer.NewConfirmGameName(),
 			installer.NewShutdownSteam(),
 			installer.NewAddGameToSteam(),
-			installer.NewConfigureProton(),
 			installer.NewStartSteamForRedists(),
 			installer.NewInstallSteamRedists(),
 			installer.NewFinalRestart(),

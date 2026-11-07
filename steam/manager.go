@@ -317,51 +317,6 @@ func (m *Manager) GetProtonVersion(appID int32) (string, error) {
 	return name, nil
 }
 
-// SetProtonVersion configures the Proton version for an app ID in config.vdf.
-func (m *Manager) SetProtonVersion(appID int32, protonVersion string) error {
-	data, err := os.ReadFile(m.ConfigPath())
-	if err != nil {
-		return err
-	}
-	root, err := vdf.Parse(string(data))
-	if err != nil {
-		return err
-	}
-
-	mapping := ensureNestedMap(root, "InstallConfigStore", "Software", "Valve", "Steam", "CompatToolMapping")
-	key := strconv.FormatUint(uint64(uint32(appID)), 10)
-	mapping[key] = map[string]any{
-		"name":     protonVersion,
-		"config":   "",
-		"priority": "250",
-	}
-
-	return os.WriteFile(m.ConfigPath(), []byte(vdf.Dump(root)), 0o644)
-}
-
-// ensureNestedMap traverses or creates nested maps along a key path.
-func ensureNestedMap(root map[string]any, keys ...string) map[string]any {
-	cur := root
-	for _, k := range keys {
-		v, ok := cur[k]
-		if !ok {
-			child := map[string]any{}
-			cur[k] = child
-			cur = child
-			continue
-		}
-		next, ok := v.(map[string]any)
-		if !ok {
-			child := map[string]any{}
-			cur[k] = child
-			cur = child
-			continue
-		}
-		cur = next
-	}
-	return cur
-}
-
 // ShutdownSteam gracefully shuts down Steam and waits for it to exit.
 func (m *Manager) ShutdownSteam(ctx context.Context) error {
 	// steam -shutdown exit code is unreliable; ignore it and rely on pgrep.
