@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"unicode"
 )
@@ -58,7 +59,7 @@ func titleCase(s string) string {
 // It tries the parent directory name first, falling back to the filename.
 func DeriveGameName(path string) string {
 	dir := filepath.Dir(path)
-	name := filepath.Base(dir)
+	name := stripBracketedText(filepath.Base(dir))
 
 	name = strings.TrimSuffix(name, "_files")
 	name = strings.TrimSuffix(name, "-files")
@@ -69,11 +70,11 @@ func DeriveGameName(path string) string {
 		"disc1": true, "disc2": true, "disk1": true, "disk2": true,
 		"cd1": true, "cd2": true, "dvd1": true, "dvd2": true,
 		"setup": true, "install": true, "installer": true,
-		".": true, "/": true, "home": true, "downloads": true,
+		"": true, ".": true, "/": true, "home": true, "downloads": true,
 	}
 
 	if genericNames[strings.ToLower(name)] {
-		name = strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
+		name = stripBracketedText(strings.TrimSuffix(filepath.Base(path), filepath.Ext(path)))
 		name = strings.ReplaceAll(name, "_", " ")
 		name = strings.ReplaceAll(name, "-", " ")
 		// If even the filename is a generic installer name, we can't determine
@@ -85,7 +86,17 @@ func DeriveGameName(path string) string {
 
 	name = titleCase(name)
 	if name == "" || name == "." || name == "/" {
-		name = strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
+		name = stripBracketedText(strings.TrimSuffix(filepath.Base(path), filepath.Ext(path)))
 	}
 	return name
+}
+
+var bracketedText = regexp.MustCompile(`\[[^\[\]]*\]`)
+
+func stripBracketedText(name string) string {
+	for bracketedText.MatchString(name) {
+		name = bracketedText.ReplaceAllString(name, "")
+	}
+
+	return strings.Join(strings.Fields(name), " ")
 }

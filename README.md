@@ -66,6 +66,8 @@ deck-game-installer /path/to/portable-game/Game.exe
 deck-game-installer smb://mynas/games/game.iso
 ```
 
+Shortcut names omit square-bracketed text: `Hollow Knight [test]` becomes `Hollow Knight`. This applies to names derived from paths and names entered manually.
+
 SMB paths are useful for installing directly from a NAS without copying files to the Deck first.
 
 ## How it works

@@ -55,11 +55,12 @@ func gameNameFromPath(isoPath, _ string) string {
 	return cleanGameName(name)
 }
 
-// cleanGameName cleans up a game name by replacing separators with spaces.
+// cleanGameName removes bracketed text and replaces separators with spaces.
 func cleanGameName(name string) string {
+	name = stripBracketedText(name)
 	replacer := strings.NewReplacer("_", " ", ".", " ", "-", " ")
 	clean := replacer.Replace(name)
-	clean = strings.TrimSpace(clean)
+	clean = strings.Join(strings.Fields(clean), " ")
 	if clean == "" {
 		return name
 	}
