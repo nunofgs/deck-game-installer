@@ -10,6 +10,8 @@ import (
 	"sync"
 	"time"
 
+	"deck-game-installer/steam"
+
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
@@ -154,8 +156,12 @@ func NewGUILogger(windowTitle, filename string) *GUILogger {
 		})
 
 	g.launchBtn = widget.NewButton("Launch Game", func() {
-		if g.appID != 0 {
-			exec.Command("xdg-open", fmt.Sprintf("steam://rungameid/%d", uint32(g.appID))).Start()
+		if g.appID == 0 {
+			return
+		}
+
+		if err := steam.NewManager().StartSteam("steam://rungameid/" + steam.GetURLAppID(g.appID)); err != nil {
+			g.Log("Could not launch game: " + err.Error())
 		}
 	})
 

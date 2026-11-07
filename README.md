@@ -72,9 +72,9 @@ SMB paths are useful for installing directly from a NAS without copying files to
 
 1. Detects whether the input is an installer or a portable game executable
 2. Mounts the ISO or SMB share if needed
-3. Creates a Steam shortcut; Steam selects Proton automatically
+3. Adds a shortcut through the running Steam client; Steam selects Proton automatically
 4. Tries to match the game to Steam appinfo and install declared common redistributables with Protontricks/Winetricks
-5. For installers, launches setup and then updates the shortcut to the installed game executable
+5. For installers, launches setup and then restarts Steam once to update the shortcut to the installed game executable
 
 ## License
 

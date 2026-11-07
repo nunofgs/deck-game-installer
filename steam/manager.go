@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"hash/crc32"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -72,95 +71,20 @@ func (m *Manager) ConfigPath() string {
 	return filepath.Join(m.steamPath, "config", "config.vdf")
 }
 
-// GenerateAppID creates a deterministic app ID from the exe path and app name.
-// This matches Steam's algorithm for non-Steam game shortcuts.
-func GenerateAppID(exePath, appName string) int32 {
-	u32 := crc32.ChecksumIEEE([]byte(exePath+appName)) | 0x80000000
-	return int32(u32)
-}
-
 // GetURLAppID converts a signed app ID to the unsigned 64-bit format used in steam:// URLs.
 func GetURLAppID(appID int32) string {
 	u64 := (uint64(uint32(appID)) << 32) | 0x02000000
 	return strconv.FormatUint(u64, 10)
 }
 
-// AddShortcut creates a new Steam shortcut, or returns the existing app ID if one already exists for that exe.
-func (m *Manager) AddShortcut(appName, exePath, args, startDir string) (int32, error) {
-	path := m.ShortcutsPath()
-
-	obj := map[string]KVValue{"shortcuts": map[string]KVValue{}}
-	if data, err := os.ReadFile(path); err == nil {
-		if parsed, err := ReadBinaryVDF(data); err == nil {
-			obj = parsed
-		}
-	}
-
-	shortcuts, ok := obj["shortcuts"].(map[string]KVValue)
-	if !ok {
-		shortcuts = map[string]KVValue{}
-		obj["shortcuts"] = shortcuts
-	}
-
-	// Return early if a shortcut for this exe already exists.
-	quoted := "\"" + exePath + "\""
-	for _, v := range shortcuts {
-		entry, ok := v.(map[string]KVValue)
-		if !ok {
-			continue
-		}
-		exe, _ := entry["Exe"].(string)
-		if exe == quoted || exe == exePath {
-			if appid, ok := entry["appid"].(int32); ok {
-				return appid, nil
-			}
-		}
-	}
-
-	if startDir == "" {
-		startDir = filepath.Dir(exePath)
-	}
-
-	appid := GenerateAppID(exePath, appName)
-	key := strconv.Itoa(nextShortcutIndex(shortcuts))
-
-	shortcuts[key] = map[string]KVValue{
-		"appid":               appid,
-		"AppName":             appName,
-		"Exe":                 quoted,
-		"StartDir":            startDir,
-		"icon":                "",
-		"ShortcutPath":        "",
-		"LaunchOptions":       args,
-		"IsHidden":            int32(0),
-		"AllowDesktopConfig":  int32(1),
-		"AllowOverlay":        int32(1),
-		"OpenVR":              int32(0),
-		"Devkit":              int32(0),
-		"DevkitGameID":        "",
-		"DevkitOverrideAppID": int32(0),
-		"LastPlayTime":        int32(0),
-		"FlatpakAppID":        "",
-		"sortas":              "",
-		"tags":                map[string]KVValue{},
-	}
-
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return 0, fmt.Errorf("failed to create shortcuts directory: %w", err)
-	}
-	data, err := WriteBinaryVDF(obj)
-	if err != nil {
-		return 0, err
-	}
-	if err := os.WriteFile(path, data, 0o644); err != nil {
-		return 0, err
-	}
-	return appid, nil
-}
-
 // FindShortcutByExe looks up a shortcut by its exe path.
 // Returns the app ID, app name, whether it was found, and a diagnostic string listing all exe paths seen.
 func (m *Manager) FindShortcutByExe(exePath string) (int32, string, bool, string, error) {
+	exePath, err := filepath.Abs(exePath)
+	if err != nil {
+		return 0, "", false, "", err
+	}
+
 	path := m.ShortcutsPath()
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -261,12 +185,16 @@ func (m *Manager) UpdateShortcut(appID int32, newExePath, newAppName string) err
 			continue
 		}
 
-		entry["Exe"] = "\"" + newExePath + "\""
-		entry["StartDir"] = filepath.Dir(newExePath)
+		setShortcutField(entry, "Exe", "\""+newExePath+"\"")
+		setShortcutField(entry, "StartDir", filepath.Dir(newExePath))
 		if newAppName != "" {
-			entry["AppName"] = newAppName
-		} else if name, ok := entry["AppName"].(string); ok {
-			entry["AppName"] = strings.TrimSuffix(name, " (Installer)")
+			setShortcutField(entry, "AppName", newAppName)
+		} else {
+			for key, value := range entry {
+				if name, ok := value.(string); ok && strings.EqualFold(key, "AppName") {
+					entry[key] = strings.TrimSuffix(name, " (Installer)")
+				}
+			}
 		}
 
 		newData, err := WriteBinaryVDF(obj)
@@ -279,14 +207,15 @@ func (m *Manager) UpdateShortcut(appID int32, newExePath, newAppName string) err
 	return errors.New("shortcut not found")
 }
 
-func nextShortcutIndex(shortcuts map[string]KVValue) int {
-	max := -1
-	for k := range shortcuts {
-		if n, err := strconv.Atoi(k); err == nil && n > max {
-			max = n
+func setShortcutField(entry map[string]KVValue, key string, value string) {
+	for existing := range entry {
+		if strings.EqualFold(existing, key) {
+			entry[existing] = value
+			return
 		}
 	}
-	return max + 1
+
+	entry[key] = value
 }
 
 // GetProtonVersion returns the configured Proton version for an app ID.
