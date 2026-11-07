@@ -71,10 +71,15 @@ func (s *InstallSteamRedists) Execute(ctx context.Context, state *State) error {
 		return nil
 	}
 
-	protonDir := state.Proton.ProtonDirectory(state.ProtonVersion)
+	protonVersion, _ := state.Steam.GetProtonVersion(state.AppID)
+	protonDir := ""
+	if protonVersion != "" {
+		protonDir = state.Proton.ProtonDirectory(protonVersion)
+	}
+
 	prefixRoot := state.Proton.PrefixRoot(state.AppID)
 	if protonDir != "" {
-		state.UI.Log(fmt.Sprintf("Proton binary: %s (%s)", state.ProtonVersion, protonDir))
+		state.UI.Log(fmt.Sprintf("Proton binary: %s (%s)", protonVersion, protonDir))
 	}
 	state.UI.Log("Game prefix: " + prefixRoot)
 

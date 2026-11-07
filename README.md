@@ -1,6 +1,6 @@
 # deck-game-installer
 
-Installing a Windows game on Steam Deck manually means juggling shortcuts, Proton settings, ISO mounts, and installer paths — every single time. It's tedious and it shouldn't be this hard. 😩
+Installing a Windows game on Steam Deck manually means juggling shortcuts, ISO mounts, and installer paths — every single time. It's tedious and it shouldn't be this hard. 😩
 
 **Right-click → Install with Steam → Play.**
 
@@ -30,6 +30,8 @@ cd deck-game-installer
 ```bash
 curl -fsSL https://raw.githubusercontent.com/nunofgs/deck-game-installer/main/install.sh | sh -s -- --uninstall
 ```
+
+Release builds check GitHub for a newer stable release at startup, verify the ZIP's SHA-256 checksum, replace the binary, and restart with the same arguments. Failed checks leave the installed version running. Updates require write access to the binary directory. Local development builds skip updates.
 
 ## Usage
 
@@ -70,7 +72,7 @@ SMB paths are useful for installing directly from a NAS without copying files to
 
 1. Detects whether the input is an installer or a portable game executable
 2. Mounts the ISO or SMB share if needed
-3. Creates a Steam shortcut and configures Proton
+3. Creates a Steam shortcut; Steam selects Proton automatically
 4. Tries to match the game to Steam appinfo and install declared common redistributables with Protontricks/Winetricks
 5. For installers, launches setup and then updates the shortcut to the installed game executable
 

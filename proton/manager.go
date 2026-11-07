@@ -33,59 +33,6 @@ func NewManager() *Manager {
 	}
 }
 
-// GetAvailableProtonVersions returns all installed Proton versions,
-// sorted with Experimental first, then descending by version number.
-func (m *Manager) GetAvailableProtonVersions() []string {
-	var versions []string
-
-	// Official Proton installs in steamapps/common.
-	// Prefer the internal name from compatibilitytool.vdf if present, otherwise derive from folder name.
-	if entries, err := os.ReadDir(m.commonPath); err == nil {
-		for _, e := range entries {
-			if e.IsDir() && strings.HasPrefix(strings.ToLower(e.Name()), "proton") {
-				vdfPath := filepath.Join(m.commonPath, e.Name(), "compatibilitytool.vdf")
-				if data, err := os.ReadFile(vdfPath); err == nil {
-					if name := internalNameFromVDF(string(data)); name != "" {
-						versions = append(versions, name)
-						continue
-					}
-				}
-				versions = append(versions, folderToInternalName(e.Name()))
-			}
-		}
-	}
-
-	// Custom builds (Proton-GE etc.) in compatibilitytools.d
-	if entries, err := os.ReadDir(m.compatToolsPath); err == nil {
-		for _, e := range entries {
-			if !e.IsDir() {
-				continue
-			}
-			vdfPath := filepath.Join(m.compatToolsPath, e.Name(), "compatibilitytool.vdf")
-			if data, err := os.ReadFile(vdfPath); err == nil {
-				if name := internalNameFromVDF(string(data)); name != "" {
-					versions = append(versions, name)
-					continue
-				}
-			}
-			versions = append(versions, folderToInternalName(e.Name()))
-		}
-	}
-
-	versions = unique(versions)
-	sort.Slice(versions, func(i, j int) bool {
-		vi, vj := versions[i], versions[j]
-		if strings.Contains(strings.ToLower(vi), "experimental") {
-			return true
-		}
-		if strings.Contains(strings.ToLower(vj), "experimental") {
-			return false
-		}
-		return vi > vj
-	})
-	return versions
-}
-
 // prefixRoot returns the pfx directory for a given app ID.
 func (m *Manager) prefixRoot(appID int32) string {
 	return filepath.Join(m.compatDataPath, strconv.FormatUint(uint64(uint32(appID)), 10), "pfx")
@@ -363,17 +310,4 @@ func internalNameFromVDF(data string) string {
 		return k
 	}
 	return ""
-}
-
-func unique(values []string) []string {
-	seen := make(map[string]struct{}, len(values))
-	out := make([]string, 0, len(values))
-	for _, v := range values {
-		if _, ok := seen[v]; ok {
-			continue
-		}
-		seen[v] = struct{}{}
-		out = append(out, v)
-	}
-	return out
 }

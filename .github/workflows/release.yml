@@ -31,7 +31,7 @@ jobs:
             libxxf86vm-dev
 
       - name: Build
-        run: go build -trimpath -ldflags="-s -w" -o deck-game-installer ./cmd/deck-game-installer
+        run: go build -trimpath -ldflags="-s -w -X main.version=${{ github.ref_name }}" -o deck-game-installer ./cmd/deck-game-installer
 
       - name: Package zip
         run: zip deck-game-installer.zip deck-game-installer install-with-steam.desktop install.sh

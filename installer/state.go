@@ -36,8 +36,7 @@ type State struct {
 	InstallerPath string // Path to the installer executable
 
 	// Steam
-	AppID         int32  // Steam shortcut app ID
-	ProtonVersion string // Proton version selected for this shortcut
+	AppID int32 // Steam shortcut app ID
 
 	// Installed game
 	GameExePath string // Path to the installed game executable
