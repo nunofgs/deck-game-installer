@@ -3,9 +3,6 @@ package installer
 import (
 	"context"
 	"fmt"
-	"path/filepath"
-	"regexp"
-	"strings"
 
 	"deck-game-installer/iso"
 )
@@ -38,7 +35,7 @@ func (s *MountISO) Execute(ctx context.Context, state *State) error {
 
 	state.MountPoint = mountPoint
 
-	state.GameName = gameNameFromPath(state.InputPath, mountPoint)
+	state.GameName = gameNameFromPath(state.InputPath)
 	state.UI.Log("Game name: " + state.GameName)
 
 	if isoMgr.WasExisting() {
@@ -48,26 +45,4 @@ func (s *MountISO) Execute(ctx context.Context, state *State) error {
 	}
 
 	return nil
-}
-
-// gameNameFromPath derives the game name from the ISO filename.
-func gameNameFromPath(isoPath, _ string) string {
-	name := strings.TrimSuffix(filepath.Base(isoPath), filepath.Ext(isoPath))
-	return cleanGameName(name)
-}
-
-var bracketedText = regexp.MustCompile(`\[[^\[\]]*\]`)
-
-func cleanGameName(name string) string {
-	for bracketedText.MatchString(name) {
-		name = bracketedText.ReplaceAllString(name, "")
-	}
-
-	replacer := strings.NewReplacer("_", " ", ".", " ", "-", " ")
-	clean := replacer.Replace(name)
-	clean = strings.Join(strings.Fields(clean), " ")
-	if clean == "" {
-		return strings.TrimSpace(name)
-	}
-	return clean
 }
